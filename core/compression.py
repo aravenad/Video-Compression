@@ -13,6 +13,9 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
+# Verrou global pour éviter les conflits entre threads
+lock = threading.Lock()
+
 def update_progress(process, progress_bar, status_label, on_complete):
     """
     Met à jour la barre de progression et affiche les logs en temps réel.
@@ -65,34 +68,35 @@ def compress_video(input_file, progress_bar, status_label):
     :param progress_bar: Barre de progression.
     :param status_label: Label pour le statut.
     """
-    if not input_file or input_file == "Aucun fichier sélectionné":
-        raise ValueError("Aucun fichier sélectionné.")
+    with lock:
+        if not input_file or input_file == "Aucun fichier sélectionné":
+            raise ValueError("Aucun fichier sélectionné.")
 
-    output_file = generate_unique_filename(input_file)
-    ffmpeg_command = [
-        "ffmpeg", "-i", input_file,
-        "-vcodec", "libx264", "-crf", "23",
-        "-y", "-progress", "pipe:1", output_file
-    ]
+        output_file = generate_unique_filename(input_file)
+        ffmpeg_command = [
+            "ffmpeg", "-i", input_file,
+            "-vcodec", "libx264", "-crf", "23",
+            "-y", "-progress", "pipe:1", output_file
+        ]
 
-    def on_complete():
-        messagebox.showinfo("Succès", f"Compression terminée : {output_file}")
+        def on_complete():
+            messagebox.showinfo("Succès", f"Compression terminée : {output_file}")
 
-    def run_compression():
-        try:
-            process = subprocess.Popen(
-                ffmpeg_command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                universal_newlines=True,
-                bufsize=1
-            )
-            update_progress(process, progress_bar, status_label, on_complete)
-        except Exception as e:
-            logging.error(f"Erreur : {e}")
-            messagebox.showerror("Erreur", f"Une erreur est survenue : {e}")
+        def run_compression():
+            try:
+                process = subprocess.Popen(
+                    ffmpeg_command,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    universal_newlines=True,
+                    bufsize=1
+                )
+                update_progress(process, progress_bar, status_label, on_complete)
+            except Exception as e:
+                logging.error(f"Erreur : {e}")
+                messagebox.showerror("Erreur", f"Une erreur est survenue : {e}")
 
-    # Démarrage du processus
-    status_label.set("Compression en cours...")
-    progress_bar["value"] = 0
-    threading.Thread(target=run_compression, daemon=True).start()
+        # Démarrage du processus
+        status_label.set("Compression en cours...")
+        progress_bar["value"] = 0
+        threading.Thread(target=run_compression, daemon=True).start()
