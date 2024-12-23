@@ -17,18 +17,17 @@ def select_file():
     if file_path:
         file_label.config(text=file_path)
 
-def update_progress(process, progress_widget):
+def update_progress(process, progress_bar, on_complete):
     """
     Met à jour la barre de progression en analysant la sortie d'FFmpeg.
     :param process: Processus en cours d'exécution (FFmpeg).
-    :param progress_widget: Widget de la barre de progression.
+    :param progress_bar: Widget de la barre de progression.
+    :param on_complete: Callback à exécuter à la fin de la compression.
     :return: None
     """
-    duration = None  # Durée totale de la vidéo en secondes
+    duration = None
     while True:
-        # Lire la sortie d'FFmpeg ligne par ligne
         output = process.stdout.readline()
-        # Sortir de la boucle si le processus est terminé
         if output == "" and process.poll() is not None:
             break
 
@@ -45,16 +44,16 @@ def update_progress(process, progress_widget):
             if match:
                 hours, minutes, seconds, milliseconds = map(int, match.groups())
                 current_time = hours * 3600 + minutes * 60 + seconds + milliseconds / 1000
-                progress = (current_time / duration) * 100  # Calcul du pourcentage
-                progress_widget["value"] = progress  # Mise à jour de la barre
+                progress = (current_time / duration) * 100
+                progress_bar["value"] = progress
 
-    # Mettre la barre à 100% une fois terminé
-    progress_widget["value"] = 100
+    # Marquer la progression comme terminée
+    progress_bar["value"] = 100
+    on_complete()
 
 def compress_video():
     """
-    Compresse la vidéo sélectionnée en utilisant FFmpeg.
-    Affiche une barre de progression pour indiquer l'état de la compression.
+    Lance la compression vidéo dans un thread séparé pour éviter de bloquer l'interface.
     :return: None
     """
     # Vérifier si un fichier a été sélectionné
@@ -63,7 +62,7 @@ def compress_video():
         messagebox.showerror("Erreur", "Veuillez sélectionner un fichier vidéo.")
         return
 
-    # Définir les paramètres de compression par défaut
+    # Définir les paramètres de compression
     output_file = input_file.rsplit(".", 1)[0] + "_compressed.mp4"
     ffmpeg_command = [
         "ffmpeg", "-i", input_file,
@@ -72,31 +71,32 @@ def compress_video():
         output_file
     ]
 
-    try:
-        # Réinitialiser la barre de progression
-        progress_bar["value"] = 0
+    def on_complete():
+        """
+        Callback exécuté une fois la compression terminée.
+        """
+        process_status.set("Compression terminée !")
+        messagebox.showinfo("Succès", f"Compression terminée :\n{output_file}")
 
-        # Lancer FFmpeg avec redirection de sortie
-        process = subprocess.Popen(
-            ffmpeg_command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,  # Combiner stdout et stderr
-            universal_newlines=True,
-            bufsize=1
-        )
+    def run_compression():
+        """
+        Exécute la commande FFmpeg et met à jour la progression.
+        """
+        try:
+            process = subprocess.Popen(
+                ffmpeg_command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                universal_newlines=True,
+                bufsize=1
+            )
+            update_progress(process, progress_bar, on_complete)
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Une erreur est survenue : {e}")
 
-        # Lancer un thread pour traiter la progression sans bloquer l'interface
-        threading.Thread(target=update_progress, args=(process, progress_bar), daemon=True).start()
-
-        # Attendre la fin du processus
-        process.wait()
-        if process.returncode == 0:
-            messagebox.showinfo("Succès", f"Compression terminée :\n{output_file}")
-        else:
-            messagebox.showerror("Erreur", "La compression a échoué.")
-    except Exception as e:
-        # Afficher une erreur générique en cas de problème
-        messagebox.showerror("Erreur", f"Une erreur est survenue : {e}")
+    # Mettre à jour le statut et lancer le thread
+    process_status.set("Compression en cours...")
+    threading.Thread(target=run_compression, daemon=True).start()
 
 # Interface graphique
 root = tk.Tk()
@@ -121,6 +121,11 @@ compress_button.pack(pady=5)
 # Barre de progression
 progress_bar = ttk.Progressbar(frame, orient="horizontal", length=400, mode="determinate")
 progress_bar.pack(pady=10)
+
+# Label pour le statut du processus
+process_status = tk.StringVar(value="En attente d'une action...")
+status_label = tk.Label(frame, textvariable=process_status, wraplength=400)
+status_label.pack(pady=5)
 
 # Lancement de la boucle principale de l'interface
 root.mainloop()
