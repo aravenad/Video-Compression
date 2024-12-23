@@ -17,7 +17,7 @@
 ## Technologies utilisées
 - **Python** : Langage de développement principal.
 - **FFmpeg** : Bibliothèque pour le traitement et la compression vidéo.
-- **Tkinter / PyQt / Kivy** : Frameworks possibles pour l’interface graphique (à définir).
+- **Tkinter** : Frameworks possibles pour l’interface graphique (à définir).
 - **Subprocess / ffmpeg-python** : Outils pour l'intégration d'FFmpeg.
   
 ---
@@ -58,4 +58,4 @@
 ---
   
 ## Licence
-Ce projet est sous licence MIT. Consultez le fichier LICENSE pour plus d'informations.
+Ce projet est sous licence MIT : consultez le fichier LICENSE pour plus d'informations.
