@@ -1,3 +1,4 @@
+import os
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import subprocess
@@ -17,11 +18,28 @@ def select_file():
     if file_path:
         file_label.config(text=file_path)
 
-def update_progress(process, progress_bar, on_complete):
+def generate_unique_filename(input_file):
+    """
+    Génère un nom de fichier unique en vérifiant l'existence de fichiers existants.
+    :param input_file: Chemin du fichier original.
+    :return: Nom de fichier unique pour la compression.
+    """
+    base_name, ext = os.path.splitext(input_file)
+    output_file = f"{base_name}_compressed{ext}"
+    counter = 1
+
+    # Vérifier si le fichier existe et ajouter un suffixe numérique si nécessaire
+    while os.path.exists(output_file):
+        output_file = f"{base_name}_compressed-{counter}{ext}"
+        counter += 1
+
+    return output_file
+
+def update_progress(process, progress_widget, on_complete):
     """
     Met à jour la barre de progression en analysant la sortie d'FFmpeg.
     :param process: Processus en cours d'exécution (FFmpeg).
-    :param progress_bar: Widget de la barre de progression.
+    :param progress_widget: Widget de la barre de progression.
     :param on_complete: Callback à exécuter à la fin de la compression.
     :return: None
     """
@@ -45,10 +63,10 @@ def update_progress(process, progress_bar, on_complete):
                 hours, minutes, seconds, milliseconds = map(int, match.groups())
                 current_time = hours * 3600 + minutes * 60 + seconds + milliseconds / 1000
                 progress = (current_time / duration) * 100
-                progress_bar["value"] = progress
+                progress_widget["value"] = progress
 
     # Marquer la progression comme terminée
-    progress_bar["value"] = 100
+    progress_widget["value"] = 100
     on_complete()
 
 def compress_video():
@@ -62,8 +80,8 @@ def compress_video():
         messagebox.showerror("Erreur", "Veuillez sélectionner un fichier vidéo.")
         return
 
-    # Définir les paramètres de compression
-    output_file = input_file.rsplit(".", 1)[0] + "_compressed.mp4"
+    # Générer un nom de fichier unique pour le fichier compressé
+    output_file = generate_unique_filename(input_file)
     ffmpeg_command = [
         "ffmpeg", "-i", input_file,
         "-vcodec", "libx264", "-crf", "23",
@@ -100,7 +118,7 @@ def compress_video():
 
 # Interface graphique
 root = tk.Tk()
-root.title("Compresseur Vidéo v1.1")
+root.title("Compresseur Vidéo v1.3")
 
 # Conteneur principal
 frame = tk.Frame(root, padx=20, pady=20)
