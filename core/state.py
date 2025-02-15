@@ -10,7 +10,8 @@ current_output_file = None
 
 compression_settings = {
     'quality': 23,
-    'preset': 'medium'
+    'preset': 'medium',
+    'threads': 2  # New: limit number of CPU threads used by ffmpeg
 }
 
 # New: list to track successfully compressed original files for deletion later
@@ -46,6 +47,7 @@ def create_ffmpeg_command(input_file, output_file):
         get_ffmpeg_path(),
         "-i", input_file,
         "-vcodec", "libx264",
+        "-threads", str(compression_settings.get('threads', 2)),  # New: set thread count
         "-crf", str(compression_settings['quality']),
         "-preset", compression_settings['preset'],
         "-y",
