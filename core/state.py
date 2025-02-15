@@ -2,6 +2,11 @@ import shutil
 import os
 import logging
 from queue import Queue
+import configparser
+
+# Load configuration from config.ini
+config = configparser.ConfigParser()
+config.read("config.ini")
 
 compression_queue = Queue()
 MAX_QUEUE_SIZE = 10
@@ -9,12 +14,13 @@ active_compressions = []
 current_output_file = None
 
 compression_settings = {
-    'quality': 23,
-    'preset': 'medium',
-    'threads': 2  # New: limit number of CPU threads used by ffmpeg
+    'quality': int(config.get("Compression", "quality", fallback="23")),
+    'preset': config.get("Compression", "preset", fallback="medium"),
+    'threads': int(config.get("Compression", "threads", fallback="2")),
+    'use_nvenc': config.getboolean("Compression", "use_nvenc", fallback=False)
 }
 
-# New: list to track successfully compressed original files for deletion later
+# List to track successfully compressed original files for deletion later
 compressed_files = []
 
 # UI elements
@@ -37,29 +43,37 @@ def get_ffmpeg_path():
     """Get ffmpeg executable path"""
     if os.name == 'nt':  # Windows
         ffmpeg = shutil.which('ffmpeg.exe')
+    else:
+        ffmpeg = shutil.which('ffmpeg')
     if not ffmpeg:
         raise RuntimeError("ffmpeg non trouvé. Veuillez l'installer.")
     return ffmpeg
 
 def create_ffmpeg_command(input_file, output_file):
     """Create ffmpeg command with current settings"""
-    return [
+    base_cmd = [
         get_ffmpeg_path(),
         "-i", input_file,
-        "-vcodec", "libx264",
-        "-threads", str(compression_settings.get('threads', 2)),  # New: set thread count
+        "-threads", str(compression_settings.get('threads', 2))
+    ]
+    if compression_settings.get('use_nvenc'):
+        base_cmd += ["-vcodec", "h264_nvenc"]
+    else:
+        base_cmd += ["-vcodec", "libx264"]
+    base_cmd += [
         "-crf", str(compression_settings['quality']),
         "-preset", compression_settings['preset'],
         "-y",
         "-progress", "pipe:1",
         output_file
     ]
+    return base_cmd
 
 def format_size(size):
     """
     Format size to human readable string using French units.
     """
-    units = ['o', 'Ko', 'Mo', 'Go']
+    units = [' o', ' Ko', ' Mo', ' Go']
     i = 0
     while size >= 1024 and i < len(units) - 1:
         size /= 1024
@@ -82,7 +96,6 @@ def update_size_estimation(input_file):
     global est_size_label
     if not est_size_label:
         return
-        
     try:
         input_size = os.path.getsize(input_file)
         est_size = estimate_output_size(input_size, compression_settings['quality'])

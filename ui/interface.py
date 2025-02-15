@@ -2,6 +2,7 @@ import tkinter as tk
 import os
 import psutil
 import logging
+import GPUtil  # New: import GPUtil for GPU monitoring
 from tkinter import filedialog, messagebox, ttk
 from core.compression import compress_video, MAX_FILE_SIZE
 from core.state import (
@@ -46,6 +47,10 @@ def start_app():
     # New: Add CPU usage label
     cpu_label = ttk.Label(stats_frame, text="CPU : 0%")
     cpu_label.pack(side=tk.LEFT, padx=5)
+    
+    # New: Add GPU usage label next to CPU
+    gpu_label = ttk.Label(stats_frame, text="GPU : 0%")
+    gpu_label.pack(side=tk.LEFT, padx=5)
     
     progress_bar = ttk.Progressbar(progress_frame, orient="horizontal", length=400, mode="determinate")
     progress_bar.pack(pady=5)
@@ -212,6 +217,16 @@ def start_app():
             memory_label.config(text=f"Mémoire : {memory_percent:.1f}%")
             cpu_usage = psutil.cpu_percent(interval=None)
             cpu_label.config(text=f"CPU : {cpu_usage:.1f}%")
+            
+            # New: Update GPU usage using GPUtil
+            gpus = GPUtil.getGPUs()
+            if gpus:
+                # Take the highest usage among GPUs
+                gpu_usage = max(gpu.load for gpu in gpus) * 100
+                gpu_label.config(text=f"GPU : {gpu_usage:.1f}%")
+            else:
+                gpu_label.config(text="GPU : 0%")
+            
             root.after(1000, update_resource_monitor)
         except Exception as e:
             logging.error(f"Resource monitoring error: {e}")
