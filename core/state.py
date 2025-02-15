@@ -59,6 +59,7 @@ def create_ffmpeg_command(input_file, output_file):
         "-i", input_file,
         "-threads", str(compression_settings.get('threads', 2))
     ]
+    # Use NVIDIA NVENC if enabled, otherwise use libx264.
     if compression_settings.get('use_nvenc'):
         base_cmd += ["-vcodec", "h264_nvenc"]
     else:

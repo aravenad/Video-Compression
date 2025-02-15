@@ -27,79 +27,62 @@ logging.basicConfig(
 lock = threading.Lock()
 
 def update_progress(process, progress_bar, status_label, on_complete):
-    """
-    Met à jour la barre de progression et affiche les logs en temps réel.
-    """
+    """Met à jour la barre de progression et affiche les logs en temps réel."""
     try:
         duration = None
-        last_update_time = 0
+        last_update = time.time()
         start_time = time.time()
 
         while True:
-            output = process.stdout.readline()
-            if not output and process.poll() is not None:
+            line = process.stdout.readline()
+            if not line and process.poll() is not None:
                 break
-
-            output = output.strip()
-            logging.info(output)
-
-            current_time = time.time()
-            # Update UI maximum once every 100ms
-            if current_time - last_update_time < 0.1:
+                
+            line = line.strip()
+            if not line:
                 continue
             
-            # Extraction de la durée totale
-            if "Duration" in output and not duration:
-                match = re.search(r"Duration: (\d+):(\d+):(\d+)\.(\d+)", output)
+            # Get duration once
+            if not duration and "Duration" in line:
+                match = re.search(r"Duration: (\d+):(\d+):(\d+)", line)
                 if match:
-                    hours, minutes, seconds, milliseconds = map(int, match.groups())
-                    duration = (
-                        hours * 3600 * 1000
-                        + minutes * 60 * 1000
-                        + seconds * 1000
-                        + milliseconds * 10
-                    )
-                    logging.info(f"Durée totale (ms) : {duration}")
+                    h, m, s = map(int, match.groups())
+                    duration = h * 3600 + m * 60 + s
 
-            # Extraction du temps traité
-            if "out_time_us=" in output and duration:
-                match = re.search(r"out_time_us=(\d+)", output)
+            # Update progress
+            if duration and "time=" in line:
+                match = re.search(r"time=(\d+):(\d+):(\d+)", line)
                 if match:
-                    current_time = int(match.group(1)) // 1000  # ms
-                    progress = min((current_time / duration) * 100, 100)
+                    h, m, s = map(int, match.groups())
+                    time_done = h * 3600 + m * 60 + s
+                    progress = min(100, (time_done / duration) * 100)
                     
-                    # Calculate time estimation
-                    elapsed_time = time.time() - start_time
+                    # Calculate remaining time
+                    elapsed = time.time() - start_time
                     if progress > 0:
-                        total_estimated = elapsed_time * (100 / progress)
-                        remaining_time = total_estimated - elapsed_time
+                        total = elapsed * (100 / progress)
+                        remaining = total - elapsed
+                        mins = int(remaining // 60)
+                        secs = int(remaining % 60)
                         
-                        # Format remaining time
-                        remaining_mins = int(remaining_time // 60)
-                        remaining_secs = int(remaining_time % 60)
-                        time_str = f"{remaining_mins}m {remaining_secs}s"
-                        
-                        status_label.set(f"Compression en cours... Temps restant: {time_str}")
-                    
-                    progress_bar["value"] = progress
-                    progress_bar.update()
+                        # Update UI (immediately)
+                        progress_bar["value"] = progress
+                        progress_bar.update()
+                        status_label.set(f"Temps restant: {mins}m {secs}s")
 
-        # Fin de la progression
-        if process.returncode == 0:  # Normal completion
+        if process.returncode == 0:
             progress_bar["value"] = 100
-            status_label.set("Compression terminée.")
-            logging.info("Compression terminée.")
-            on_complete(canceled=False)
-        else:  # Process was terminated or failed
-            logging.info("Compression annulée ou échouée.")
+            progress_bar.update()
+            status_label.set("Terminé")
+            on_complete(False)
+        else:
             cleanup_current_file()
-            on_complete(canceled=True)
+            on_complete(True)
+
     except Exception as e:
         logging.error(f"Error in progress update: {e}")
         cleanup_current_file()
-        on_complete(canceled=True)
-
-    last_update_time = current_time
+        on_complete(True)
 
 MAX_FILE_SIZE = 4 * 1024 * 1024 * 1024  # 4 GB
 COMPRESSION_TIMEOUT = 3600  # 1 heure
@@ -112,7 +95,9 @@ def compress_video(input_file, progress_bar, status_label, comp_frame=None):
     :param status_label: Label pour le statut.
     :param comp_frame: (Optionnel) UI frame associé à cette compression.
     """
+    from core.state import compression_queue  # Ensure proper import
     with lock:
+        # Removed limit on simultaneous compressions.
         if not input_file or input_file == "Aucun fichier sélectionné":
             raise ValueError("Aucun fichier sélectionné.")
         if os.path.getsize(input_file) > MAX_FILE_SIZE:
@@ -120,7 +105,6 @@ def compress_video(input_file, progress_bar, status_label, comp_frame=None):
         if shutil.disk_usage(os.path.dirname(input_file)).free < os.path.getsize(input_file):
             raise ValueError("Espace disque insuffisant")
         
-        # Use a consistent module alias for state
         import core.state as state_module
         output_file = generate_unique_filename(input_file)
         state_module.current_output_file = output_file
