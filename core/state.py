@@ -82,23 +82,13 @@ def format_size(size):
 
 def estimate_output_size(input_size, quality):
     """
-    Estimate output file size based on input size and quality.
+    Estimate output file size based on input size, quality and encoder.
     Uses a compression ratio that varies linearly from 2% (quality=10)
-    to 10% (quality=51) of the original size and applies a correction factor of 1.15.
+    to 10% (quality=51) of the original size.
+    Applies a correction factor which is increased for GPU (NVENC) acceleration.
     """
     quality = max(quality, 10)
     ratio = ((quality - 10) / 41) * 0.08 + 0.02
-    estimated_size = input_size * ratio * 1.15  # Correction factor added
-    return max(estimated_size, input_size * 0.02 * 1.15)
-
-def update_size_estimation(input_file):
-    """Update size estimation label"""
-    global est_size_label
-    if not est_size_label:
-        return
-    try:
-        input_size = os.path.getsize(input_file)
-        est_size = estimate_output_size(input_size, compression_settings['quality'])
-        est_size_label.config(text=f"Taille estimée: {format_size(est_size)}")
-    except Exception as e:
-        logging.error(f"Error updating size estimation: {e}")
+    correction = 1.17 if compression_settings.get('use_nvenc') else 1.15
+    estimated_size = input_size * ratio * correction
+    return max(estimated_size, input_size * 0.02 * correction)

@@ -128,9 +128,6 @@ def compress_video(input_file, progress_bar, status_label):
         output_file = generate_unique_filename(input_file)
         core.state.current_output_file = output_file
         
-        # Update size estimation
-        core.state.update_size_estimation(input_file)
-        
         try:
             ffmpeg_command = create_ffmpeg_command(input_file, output_file)
         except RuntimeError as e:
@@ -150,28 +147,6 @@ def compress_video(input_file, progress_bar, status_label):
                     f"Compression terminée : {output_file}\n"
                     f"Réduction: {reduction:.1f}%")
             core.state.current_output_file = None
-
-        def estimate_output_size(input_size, quality):
-            # Improved size estimation based on CRF value
-            base_ratio = 0.7  # Base compression ratio
-            quality_factor = (51 - quality) / 51  # Higher quality = less compression
-            compression_ratio = base_ratio + (quality_factor * 0.3)  # Adjust ratio based on quality
-            estimated_size = input_size * compression_ratio
-            return max(estimated_size, input_size * 0.1)  # Minimum 10% of original size
-
-        input_size = os.path.getsize(input_file)
-        est_size = estimate_output_size(input_size, compression_settings['quality'])
-        
-        # Format size in appropriate unit
-        def format_size(size):
-            for unit in ['B', 'KB', 'MB', 'GB']:
-                if size < 1024:
-                    return f"{size:.1f}{unit}"
-                size /= 1024
-            return f"{size:.1f}GB"
-
-        if est_size_label is not None:
-            est_size_label.config(text=f"Taille estimée: {format_size(est_size)}")
 
         def run_compression():
             try:

@@ -2,7 +2,7 @@ import tkinter as tk
 import os
 import psutil
 import logging
-import GPUtil  # New: import GPUtil for GPU monitoring
+import GPUtil  # For GPU monitoring
 from tkinter import filedialog, messagebox, ttk
 from core.compression import compress_video, MAX_FILE_SIZE
 from core.state import (
@@ -16,50 +16,33 @@ def start_app():
     root = tk.Tk()
     root.title("Compresseur Vidéo")
     
-    # Initialize state
-    process_status = tk.StringVar(value="En attente...")
+    # Create separate variables: one for time left, one for queue/status messages.
+    time_left_var = tk.StringVar(value="Temps restant: --")
+    queue_status_var = tk.StringVar(value="En attente...")
+
     frame = tk.Frame(root, padx=20, pady=20)
     frame.pack()
-
+    
     # Files list frame
     files_frame = ttk.LabelFrame(frame, text="Fichiers sélectionnés")
     files_frame.pack(fill="x", pady=10)
     files_listbox = tk.Listbox(files_frame, height=5, width=50)
     files_listbox.pack(pady=5)
-
-    # Import state module
-    import core.state
     
-    # Progress frame with proper state management
-    progress_frame = ttk.LabelFrame(frame, text="Progression")
-    progress_frame.pack(fill="x", pady=10)
+    # Rename 'Progression' frame to 'Performances' and show only performance stats
+    performances_frame = ttk.LabelFrame(frame, text="Performances")
+    performances_frame.pack(fill="x", pady=10)
     
-    stats_frame = ttk.Frame(progress_frame)
+    stats_frame = ttk.Frame(performances_frame)
     stats_frame.pack(fill="x")
-    
-    est_size_label = ttk.Label(stats_frame, text="Taille estimée : --")
-    est_size_label.pack(side=tk.RIGHT, padx=5)
-    core.state.est_size_label = est_size_label
     
     memory_label = ttk.Label(stats_frame, text="Mémoire : 0%")
     memory_label.pack(side=tk.LEFT, padx=5)
-    
-    # New: Add CPU usage label
     cpu_label = ttk.Label(stats_frame, text="CPU : 0%")
     cpu_label.pack(side=tk.LEFT, padx=5)
-    
-    # New: Add GPU usage label next to CPU
     gpu_label = ttk.Label(stats_frame, text="GPU : 0%")
     gpu_label.pack(side=tk.LEFT, padx=5)
     
-    progress_bar = ttk.Progressbar(progress_frame, orient="horizontal", length=400, mode="determinate")
-    progress_bar.pack(pady=5)
-    core.state.progress_bar = progress_bar
-    
-    status_label = ttk.Label(progress_frame, textvariable=process_status)
-    status_label.pack(pady=5)
-    core.state.status_label = status_label
-
     # Settings frame
     settings_frame = ttk.LabelFrame(frame, text="Paramètres")
     settings_frame.pack(fill="x", pady=10)
@@ -69,28 +52,29 @@ def start_app():
     quality_scale.grid(row=0, column=1, padx=5)
     ttk.Label(settings_frame, text="Vitesse :").grid(row=1, column=0, padx=5)
     speed_combo = ttk.Combobox(settings_frame, 
-                              values=['ultrafast', 'superfast', 'veryfast', 'faster', 
-                                     'fast', 'medium', 'slow', 'slower', 'veryslow'])
+                               values=['ultrafast', 'superfast', 'veryfast', 'faster', 
+                                       'fast', 'medium', 'slow', 'slower', 'veryslow'])
     speed_combo.set(compression_settings['preset'])
     speed_combo.grid(row=1, column=1, padx=5)
-
-    # Add delete-originals checkbox in Settings frame
+    
+    # Delete-originals checkbox
     delete_original_var = tk.BooleanVar(value=False)
-    delete_checkbox = ttk.Checkbutton(settings_frame, text="Supprimer fichiers originaux après compression", variable=delete_original_var)
+    delete_checkbox = ttk.Checkbutton(settings_frame, 
+                                      text="Supprimer fichiers originaux après compression", 
+                                      variable=delete_original_var)
     delete_checkbox.grid(row=2, column=0, columnspan=2, padx=5, pady=5)
-
+    
     def update_settings(*args):
         compression_settings['quality'] = int(quality_scale.get())
         compression_settings['preset'] = speed_combo.get()
-
+    
     quality_scale.configure(command=update_settings)
     speed_combo.bind('<<ComboboxSelected>>', update_settings)
-
+    
     def select_files(single=False):
         if compression_queue.qsize() >= MAX_QUEUE_SIZE:
             messagebox.showwarning("Attention", "File d'attente pleine (max 10 fichiers)")
             return
-            
         if single:
             files = filedialog.askopenfilename(
                 title="Sélectionnez une vidéo",
@@ -102,7 +86,6 @@ def start_app():
                 title="Sélectionnez des vidéos",
                 filetypes=[("Fichiers vidéo", "*.mp4 *.mkv *.avi *.mov *.flv *.wmv")]
             )
-        
         valid_files = []
         for path in files:
             try:
@@ -115,51 +98,57 @@ def start_app():
                 compression_queue.put(path)
             except OSError as e:
                 messagebox.showerror("Erreur", f"Erreur d'accès au fichier: {path}")
-                
         if valid_files:
-            process_status.set(f"{len(valid_files)} fichiers ajoutés à la file.")
+            queue_status_var.set(f"{len(valid_files)} fichiers ajoutés à la file.")
+    
+    # Replace existing running_frame with a scrollable frame for running compressions
+    running_labelframe = ttk.LabelFrame(frame, text="Compresions en cours")
+    running_labelframe.pack(fill="both", pady=10)
+    # Increased width to 500 to show the full progress bar even with a scrollbar.
+    scroll_canvas = tk.Canvas(running_labelframe, height=200, width=500)
+    scrollbar = ttk.Scrollbar(running_labelframe, orient="vertical", command=scroll_canvas.yview)
+    scroll_canvas.configure(yscrollcommand=scrollbar.set)
+    scrollbar.pack(side="right", fill="y")
+    scroll_canvas.pack(side="left", fill="both", expand=True)
+    running_frame = ttk.Frame(scroll_canvas)
+    scroll_canvas.create_window((0,0), window=running_frame, anchor="nw")
+    
+    def on_running_frame_config(event):
+        scroll_canvas.configure(scrollregion=scroll_canvas.bbox("all"))
+    running_frame.bind("<Configure>", on_running_frame_config)
 
     def process_queue():
         if compression_queue.empty():
-            process_status.set("File d'attente vide")
+            queue_status_var.set("File d'attente vide")
             return
-
-        if active_compressions:
-            process_status.set("Compression en cours...")
-            return
-
         next_file = compression_queue.get()
         try:
-            # Add debug logging
             logging.info(f"Starting compression for: {next_file}")
-            compress_video(next_file, progress_bar, process_status)  # Changed from status_label
+            # Create a new subframe for this compression
+            comp_frame = ttk.Frame(running_frame, relief="sunken", borderwidth=1, padding=5)
+            comp_frame.pack(fill="x", pady=3)
+            file_label = ttk.Label(comp_frame, text=f"Compression: {os.path.basename(next_file)}")
+            file_label.pack(anchor="w")
+            local_time_var = tk.StringVar(value="Temps restant: --")
+            local_status = ttk.Label(comp_frame, textvariable=local_time_var)
+            local_status.pack(anchor="w", pady=2)
+            local_progress = ttk.Progressbar(comp_frame, orient="horizontal", length=400, mode="determinate")
+            local_progress.pack(pady=2)
+            # Launch compression with its dedicated widgets
+            compress_video(next_file, local_progress, local_time_var)
             files_listbox.delete(0)
-            
-            # Schedule next file processing
             if not compression_queue.empty():
                 root.after(1000, process_queue)
         except Exception as e:
             logging.error(f"Compression error: {e}")
             messagebox.showerror("Erreur", str(e))
-            process_status.set("Erreur de compression")
-
-    def update_queue_status():
-        queue_size = compression_queue.qsize()
-        if queue_size > 0:
-            process_status.set(f"{queue_size} fichiers en attente")
-        root.after(500, update_queue_status)
-
-    # Start queue status updates
-    update_queue_status()
+            queue_status_var.set("Erreur de compression")
     
     def cancel_compression():
         if not active_compressions:
             return
-
-        # Store current file path before cleanup
         import core.state
         current_file = core.state.current_output_file
-
         for process in active_compressions[:]:
             if process and process.poll() is None:
                 try:
@@ -170,18 +159,15 @@ def start_app():
                         logging.info(f"Deleted incomplete file: {current_file}")
                 except Exception as e:
                     logging.error(f"Error during compression cancellation: {e}")
-        
         active_compressions.clear()
         core.state.current_output_file = None
-        process_status.set("Compression annulée")
-        progress_bar["value"] = 0
-
-    # Buttons frame (moved up)
+        queue_status_var.set("Compression annulée")
+    
     buttons_frame = ttk.Frame(frame)
     buttons_frame.pack(fill="x", pady=10)
     
     select_button = ttk.Button(buttons_frame, text="Sélectionner des fichiers", 
-                              command=lambda: select_files(False))
+                               command=lambda: select_files(False))
     select_button.pack(side=tk.LEFT, padx=5)
     
     compress_button = ttk.Button(buttons_frame, text="Compresser", command=process_queue)
@@ -189,8 +175,8 @@ def start_app():
     
     cancel_button = ttk.Button(buttons_frame, text="Annuler", command=cancel_compression)
     cancel_button.pack(side=tk.RIGHT, padx=5)
-    cancel_button["state"] = "disabled"  # Initially disabled
-
+    cancel_button["state"] = "disabled"
+    
     def update_buttons():
         if active_compressions:
             cancel_button["state"] = "normal"
@@ -199,45 +185,37 @@ def start_app():
             cancel_button["state"] = "disabled"
             compress_button["state"] = "normal"
         root.after(100, update_buttons)
-
-    # Start button state updates after buttons are created
+    
     root.after(100, update_buttons)
     
-    update_buttons()
-
-    # Update state references
-    import core.state
-    core.state.est_size_label = est_size_label
-    core.state.progress_bar = progress_bar
-    core.state.status_label = status_label
-
+    def update_queue_status():
+        qs = f"{compression_queue.qsize()} fichiers en attente" if compression_queue.qsize() else "En attente..."
+        queue_status_var.set(qs)
+        root.after(500, update_queue_status)
+    
+    update_queue_status()
+    
     def update_resource_monitor():
         try:
             memory_percent = psutil.Process().memory_percent()
             memory_label.config(text=f"Mémoire : {memory_percent:.1f}%")
             cpu_usage = psutil.cpu_percent(interval=None)
             cpu_label.config(text=f"CPU : {cpu_usage:.1f}%")
-            
-            # New: Update GPU usage using GPUtil
             gpus = GPUtil.getGPUs()
             if gpus:
-                # Take the highest usage among GPUs
                 gpu_usage = max(gpu.load for gpu in gpus) * 100
                 gpu_label.config(text=f"GPU : {gpu_usage:.1f}%")
             else:
                 gpu_label.config(text="GPU : 0%")
-            
             root.after(1000, update_resource_monitor)
         except Exception as e:
             logging.error(f"Resource monitoring error: {e}")
-
+    
     root.after(1000, update_resource_monitor)
-
-    # New: Periodically check and delete original files once compression is done and checkbox is checked.
+    
     def check_delete_originals():
         from core import state as state_module
         if compression_queue.empty() and not active_compressions and delete_original_var.get():
-            # Delete only files that were in the compression queue and recorded as compressed
             for original in state_module.compressed_files:
                 try:
                     os.remove(original)
@@ -245,11 +223,12 @@ def start_app():
                 except Exception as e:
                     logging.error(f"Error deleting {original}: {e}")
             state_module.compressed_files.clear()
-            process_status.set("Fichiers originaux supprimés.")
+            queue_status_var.set("Fichiers originaux supprimés.")
         root.after(1000, check_delete_originals)
-
-    # Start queue status updates and deletion check
-    update_queue_status()
+    
     root.after(1000, check_delete_originals)
-
+    
     root.mainloop()
+
+if __name__ == "__main__":
+    start_app()
