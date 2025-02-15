@@ -16,6 +16,9 @@ def rename_files(folder):
     to_rename = []
     correct_files = []
     for f in os.listdir(folder):
+        # Exclude files with '_compressed' in their name
+        if '_compressed' in f:
+            continue
         full_path = os.path.join(folder, f)
         if os.path.isfile(full_path):
             m = pattern.match(f)
