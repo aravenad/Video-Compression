@@ -104,29 +104,26 @@ def update_progress(process, progress_bar, status_label, on_complete):
 MAX_FILE_SIZE = 4 * 1024 * 1024 * 1024  # 4 GB
 COMPRESSION_TIMEOUT = 3600  # 1 heure
 
-def compress_video(input_file, progress_bar, status_label):
+def compress_video(input_file, progress_bar, status_label, comp_frame=None):
     """
     Lance la compression dans un thread séparé.
     :param input_file: Fichier à compresser.
     :param progress_bar: Barre de progression.
     :param status_label: Label pour le statut.
+    :param comp_frame: (Optionnel) UI frame associé à cette compression.
     """
     with lock:
         if not input_file or input_file == "Aucun fichier sélectionné":
             raise ValueError("Aucun fichier sélectionné.")
-            
-        # Add file validation
         if os.path.getsize(input_file) > MAX_FILE_SIZE:
             raise ValueError("Fichier trop volumineux (max 4GB)")
-            
-        # Add disk space check
         if shutil.disk_usage(os.path.dirname(input_file)).free < os.path.getsize(input_file):
             raise ValueError("Espace disque insuffisant")
         
-        import core.state
-        
+        # Use a consistent module alias for state
+        import core.state as state_module
         output_file = generate_unique_filename(input_file)
-        core.state.current_output_file = output_file
+        state_module.current_output_file = output_file
         
         try:
             ffmpeg_command = create_ffmpeg_command(input_file, output_file)
@@ -136,17 +133,13 @@ def compress_video(input_file, progress_bar, status_label):
 
         def on_complete(canceled=False):
             if not canceled:
-                # Record the input file to be deleted later
-                import core.state
-                core.state.compressed_files.append(input_file)
-                
+                state_module.compressed_files.append(input_file)
                 final_size = os.path.getsize(output_file)
                 original_size = os.path.getsize(input_file)
                 reduction = ((original_size - final_size) / original_size) * 100
                 messagebox.showinfo("Succès", 
-                    f"Compression terminée : {output_file}\n"
-                    f"Réduction: {reduction:.1f}%")
-            core.state.current_output_file = None
+                    f"Compression terminée : {output_file}\nRéduction: {reduction:.1f}%")
+            state_module.current_output_file = None
 
         def run_compression():
             try:
@@ -158,15 +151,15 @@ def compress_video(input_file, progress_bar, status_label):
                     bufsize=1
                 )
                 active_compressions.append(process)
-                
+                if comp_frame is not None:
+                    comp_frame.process = process
                 try:
-                    # Fix: Change to 'canceled' instead of 'cancelled'
                     update_progress(process, progress_bar, status_label, 
-                                  lambda canceled=False: on_complete(canceled))
+                                    lambda canceled=False: on_complete(canceled))
                 except subprocess.TimeoutExpired:
-                    if core.state.current_output_file:
+                    if state_module.current_output_file:
                         try:
-                            os.remove(core.state.current_output_file)
+                            os.remove(state_module.current_output_file)
                         except OSError:
                             pass
                     process.kill()

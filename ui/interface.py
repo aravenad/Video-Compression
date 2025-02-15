@@ -23,11 +23,33 @@ def start_app():
     frame = tk.Frame(root, padx=20, pady=20)
     frame.pack()
     
-    # Files list frame
+    # Files list frame with scrollbar
     files_frame = ttk.LabelFrame(frame, text="Fichiers sélectionnés")
     files_frame.pack(fill="x", pady=10)
     files_listbox = tk.Listbox(files_frame, height=5, width=50)
-    files_listbox.pack(pady=5)
+    files_listbox.pack(side="left", pady=5, fill="x", expand=True)
+    files_scroll = ttk.Scrollbar(files_frame, orient="vertical", command=files_listbox.yview)
+    files_listbox.configure(yscrollcommand=files_scroll.set)
+    files_scroll.pack(side="right", fill="y")
+    # New: Button to delete selected file from list and queue
+    def delete_selected_file():
+        sel = files_listbox.curselection()
+        if not sel:
+            return
+        index = sel[0]
+        import core.state as state_module
+        # Remove from pending_files list based on order in UI.
+        if index < len(state_module.pending_files):
+            state_module.pending_files.pop(index)
+        files_listbox.delete(index)
+        # Rebuild the compression_queue from pending_files.
+        while not compression_queue.empty():
+            compression_queue.get_nowait()
+        for f in state_module.pending_files:
+            compression_queue.put(f)
+        queue_status_var.set(f"{compression_queue.qsize()} fichiers en attente")
+    delete_button = ttk.Button(files_frame, text="Supprimer du queue", command=delete_selected_file)
+    delete_button.pack(side="bottom", pady=5)
     
     # Rename 'Progression' frame to 'Performances' and show only performance stats
     performances_frame = ttk.LabelFrame(frame, text="Performances")
@@ -87,6 +109,7 @@ def start_app():
                 filetypes=[("Fichiers vidéo", "*.mp4 *.mkv *.avi *.mov *.flv *.wmv")]
             )
         valid_files = []
+        import core.state as state_module
         for path in files:
             try:
                 size = os.path.getsize(path)
@@ -96,6 +119,7 @@ def start_app():
                 valid_files.append(path)
                 files_listbox.insert(tk.END, os.path.basename(path))
                 compression_queue.put(path)
+                state_module.pending_files.append(path)
             except OSError as e:
                 messagebox.showerror("Erreur", f"Erreur d'accès au fichier: {path}")
         if valid_files:
@@ -117,6 +141,20 @@ def start_app():
         scroll_canvas.configure(scrollregion=scroll_canvas.bbox("all"))
     running_frame.bind("<Configure>", on_running_frame_config)
 
+    # Mutable container to store the selected running compression frame
+    selected_running_comp = [None]
+    
+    def select_running_comp(frame):
+        # Deselect previous frame if exists
+        if selected_running_comp[0] is not None:
+            selected_running_comp[0].configure(style="TFrame")
+        selected_running_comp[0] = frame
+        frame.configure(style="Selected.TFrame")
+    
+    # (Optional) Define a style for selected running frame
+    style = ttk.Style()
+    style.configure("Selected.TFrame", background="lightblue")
+    
     def process_queue():
         if compression_queue.empty():
             queue_status_var.set("File d'attente vide")
@@ -127,6 +165,9 @@ def start_app():
             # Create a new subframe for this compression
             comp_frame = ttk.Frame(running_frame, relief="sunken", borderwidth=1, padding=5)
             comp_frame.pack(fill="x", pady=3)
+            # NEW: Adjust the frame width to match the scroll_canvas width
+            comp_frame.config(width=scroll_canvas.winfo_width())
+            comp_frame.bind("<Button-1>", lambda event, frame=comp_frame: select_running_comp(frame))
             file_label = ttk.Label(comp_frame, text=f"Compression: {os.path.basename(next_file)}")
             file_label.pack(anchor="w")
             local_time_var = tk.StringVar(value="Temps restant: --")
@@ -134,8 +175,8 @@ def start_app():
             local_status.pack(anchor="w", pady=2)
             local_progress = ttk.Progressbar(comp_frame, orient="horizontal", length=400, mode="determinate")
             local_progress.pack(pady=2)
-            # Launch compression with its dedicated widgets
-            compress_video(next_file, local_progress, local_time_var)
+            # Launch compression with its dedicated widgets and pass the comp_frame
+            compress_video(next_file, local_progress, local_time_var, comp_frame)
             files_listbox.delete(0)
             if not compression_queue.empty():
                 root.after(1000, process_queue)
@@ -145,22 +186,25 @@ def start_app():
             queue_status_var.set("Erreur de compression")
     
     def cancel_compression():
-        if not active_compressions:
+        # Cancel only the selected running compression
+        if selected_running_comp[0] is None:
             return
-        import core.state
-        current_file = core.state.current_output_file
-        for process in active_compressions[:]:
-            if process and process.poll() is None:
-                try:
-                    process.terminate()
-                    process.wait(timeout=1)
-                    if current_file and os.path.exists(current_file):
-                        os.remove(current_file)
-                        logging.info(f"Deleted incomplete file: {current_file}")
-                except Exception as e:
-                    logging.error(f"Error during compression cancellation: {e}")
-        active_compressions.clear()
-        core.state.current_output_file = None
+        comp = selected_running_comp[0]
+        process = getattr(comp, "process", None)
+        # Fix: use proper import alias for core.state
+        import core.state as state_module
+        if process and process.poll() is None:
+            try:
+                process.terminate()
+                process.wait(timeout=1)
+                # Delete the output file if exists
+                if state_module.current_output_file and os.path.exists(state_module.current_output_file):
+                    os.remove(state_module.current_output_file)
+                    logging.info(f"Deleted incomplete file: {state_module.current_output_file}")
+            except Exception as e:
+                logging.error(f"Error during compression cancellation: {e}")
+        comp.destroy()
+        selected_running_comp[0] = None
         queue_status_var.set("Compression annulée")
     
     buttons_frame = ttk.Frame(frame)
