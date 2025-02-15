@@ -13,6 +13,9 @@ compression_settings = {
     'preset': 'medium'
 }
 
+# New: list to track successfully compressed original files for deletion later
+compressed_files = []
+
 # UI elements
 est_size_label = None
 progress_bar = None

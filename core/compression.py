@@ -139,6 +139,10 @@ def compress_video(input_file, progress_bar, status_label):
 
         def on_complete(canceled=False):
             if not canceled:
+                # Record the input file to be deleted later
+                import core.state
+                core.state.compressed_files.append(input_file)
+                
                 final_size = os.path.getsize(output_file)
                 original_size = os.path.getsize(input_file)
                 reduction = ((original_size - final_size) / original_size) * 100

@@ -65,6 +65,11 @@ def start_app():
     speed_combo.set(compression_settings['preset'])
     speed_combo.grid(row=1, column=1, padx=5)
 
+    # Add delete-originals checkbox in Settings frame
+    delete_original_var = tk.BooleanVar(value=False)
+    delete_checkbox = ttk.Checkbutton(settings_frame, text="Supprimer fichiers originaux après compression", variable=delete_original_var)
+    delete_checkbox.grid(row=2, column=0, columnspan=2, padx=5, pady=5)
+
     def update_settings(*args):
         compression_settings['quality'] = int(quality_scale.get())
         compression_settings['preset'] = speed_combo.get()
@@ -206,4 +211,24 @@ def start_app():
             logging.error(f"Resource monitoring error: {e}")
 
     root.after(1000, update_resource_monitor)
+
+    # New: Periodically check and delete original files once compression is done and checkbox is checked.
+    def check_delete_originals():
+        from core import state as state_module
+        if compression_queue.empty() and not active_compressions and delete_original_var.get():
+            # Delete only files that were in the compression queue and recorded as compressed
+            for original in state_module.compressed_files:
+                try:
+                    os.remove(original)
+                    logging.info(f"Deleted original file: {original}")
+                except Exception as e:
+                    logging.error(f"Error deleting {original}: {e}")
+            state_module.compressed_files.clear()
+            process_status.set("Fichiers originaux supprimés.")
+        root.after(1000, check_delete_originals)
+
+    # Start queue status updates and deletion check
+    update_queue_status()
+    root.after(1000, check_delete_originals)
+
     root.mainloop()
