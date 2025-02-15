@@ -56,20 +56,26 @@ def create_ffmpeg_command(input_file, output_file):
     ]
 
 def format_size(size):
-    """Format size to human readable string"""
-    for unit in ['B', 'KB', 'MB', 'GB']:
-        if size < 1024:
-            return f"{size:.1f}{unit}"
+    """
+    Format size to human readable string using French units.
+    """
+    units = ['o', 'Ko', 'Mo', 'Go']
+    i = 0
+    while size >= 1024 and i < len(units) - 1:
         size /= 1024
-    return f"{size:.1f}GB"
+        i += 1
+    return f"{size:.1f}{units[i]}"
 
 def estimate_output_size(input_size, quality):
-    """Estimate output file size based on input size and quality"""
-    base_ratio = 0.7
-    quality_factor = (51 - quality) / 51
-    compression_ratio = base_ratio + (quality_factor * 0.3)
-    estimated_size = input_size * compression_ratio
-    return max(estimated_size, input_size * 0.1)
+    """
+    Estimate output file size based on input size and quality.
+    Uses a compression ratio that varies linearly from 2% (quality=10)
+    to 10% (quality=51) of the original size and applies a correction factor of 1.15.
+    """
+    quality = max(quality, 10)
+    ratio = ((quality - 10) / 41) * 0.08 + 0.02
+    estimated_size = input_size * ratio * 1.15  # Correction factor added
+    return max(estimated_size, input_size * 0.02 * 1.15)
 
 def update_size_estimation(input_file):
     """Update size estimation label"""
