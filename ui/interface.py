@@ -43,6 +43,10 @@ def start_app():
     memory_label = ttk.Label(stats_frame, text="Mémoire : 0%")
     memory_label.pack(side=tk.LEFT, padx=5)
     
+    # New: Add CPU usage label
+    cpu_label = ttk.Label(stats_frame, text="CPU : 0%")
+    cpu_label.pack(side=tk.LEFT, padx=5)
+    
     progress_bar = ttk.Progressbar(progress_frame, orient="horizontal", length=400, mode="determinate")
     progress_bar.pack(pady=5)
     core.state.progress_bar = progress_bar
@@ -206,6 +210,8 @@ def start_app():
         try:
             memory_percent = psutil.Process().memory_percent()
             memory_label.config(text=f"Mémoire : {memory_percent:.1f}%")
+            cpu_usage = psutil.cpu_percent(interval=None)
+            cpu_label.config(text=f"CPU : {cpu_usage:.1f}%")
             root.after(1000, update_resource_monitor)
         except Exception as e:
             logging.error(f"Resource monitoring error: {e}")
