@@ -36,24 +36,11 @@
   
 ## Utilisation
 1. Exécutez l'application :
-   python src/main.py
+   python ./main.py
 2. Sélectionnez un dossier contenant vos vidéos.
-3. Configurez vos options de compression ou utilisez les paramètres par défaut.
-4. Ajoutez les vidéos à la file d'attente.
+3. Ajoutez les vidéos à la file d'attente.
+4. Configurez vos options de compression ou utilisez les paramètres par défaut.
 5. Lancez la compression et profitez d'un processus automatisé !
-  
----
-  
-## Roadmap
-### Version 1.0
-- Interface graphique de base.
-- Compression individuelle avec paramètres par défaut.
-### Version 1.5
-- Ajout de la file d'attente.
-- Compression multiple gérée automatiquement.
-### Version 2.0
-- Suppression automatique des fichiers d'origine après compression.
-- Support multi-platformes (Windows, macOS, Linux).
   
 ---
   
