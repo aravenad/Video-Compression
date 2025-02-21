@@ -84,7 +84,7 @@ def update_progress(process, progress_bar, status_label, on_complete):
         cleanup_current_file()
         on_complete(True)
 
-MAX_FILE_SIZE = 4 * 1024 * 1024 * 1024  # 4 GB
+MAX_FILE_SIZE = 20 * 1024 * 1024 * 1024  # 4 GB
 COMPRESSION_TIMEOUT = 3600  # 1 heure
 
 def compress_video(input_file, progress_bar, status_label, comp_frame=None):

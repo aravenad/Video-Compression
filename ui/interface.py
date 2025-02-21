@@ -59,7 +59,7 @@ def build_file_queue_tab(notebook, queue_status_var):
         for path in files:
             try:
                 if os.path.getsize(path) > MAX_FILE_SIZE:
-                    messagebox.showwarning("Attention", f"Fichier trop volumineux: {path}")
+                    messagebox.showwarning("Attention", f"Fichier trop volumineux : {path}")
                     continue
                 files_listbox.insert(tk.END, os.path.basename(path))
                 compression_queue.put(path)
@@ -241,7 +241,7 @@ def start_app():
             # Find the name of the only active compression
             for child in active_frame.winfo_children():
                 if hasattr(child, 'process'):
-                    name = child.winfo_children()[0].cget("text").replace("En cours: ", "")
+                    name = child.winfo_children()[0].cget("text").replace("En cours : ", "")
                     queue_status_var.set(f"Compression de {name}...")
                     break
         else:
