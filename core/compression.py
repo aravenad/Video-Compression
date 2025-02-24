@@ -84,24 +84,20 @@ def update_progress(process, progress_bar, status_label, on_complete):
         cleanup_current_file()
         on_complete(True)
 
-MAX_FILE_SIZE = 20 * 1024 * 1024 * 1024  # 4 GB
-COMPRESSION_TIMEOUT = 3600  # 1 heure
+MAX_FILE_SIZE = 20 * 1024 * 1024 * 1024  # 20 GB default
 
 def compress_video(input_file, progress_bar, status_label, comp_frame=None):
     """
     Lance la compression dans un thread séparé.
-    :param input_file: Fichier à compresser.
-    :param progress_bar: Barre de progression.
-    :param status_label: Label pour le statut.
-    :param comp_frame: (Optionnel) UI frame associé à cette compression.
     """
-    from core.state import compression_queue  # Ensure proper import
+    from core.state import compression_queue, compression_settings  # Add compression_settings
     with lock:
-        # Removed limit on simultaneous compressions.
         if not input_file or input_file == "Aucun fichier sélectionné":
             raise ValueError("Aucun fichier sélectionné.")
-        if os.path.getsize(input_file) > MAX_FILE_SIZE:
-            raise ValueError("Fichier trop volumineux (max 4GB)")
+        # Check file size only if uncap_size is False
+        if not compression_settings.get('uncap_size', False):
+            if os.path.getsize(input_file) > MAX_FILE_SIZE:
+                raise ValueError("Fichier trop volumineux (max 20GB)")
         if shutil.disk_usage(os.path.dirname(input_file)).free < os.path.getsize(input_file):
             raise ValueError("Espace disque insuffisant")
         

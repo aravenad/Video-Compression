@@ -58,9 +58,11 @@ def build_file_queue_tab(notebook, queue_status_var):
                     filetypes=[("Fichiers vidéo", "*.mp4 *.mkv *.avi *.mov *.flv *.wmv")])
         for path in files:
             try:
-                if os.path.getsize(path) > MAX_FILE_SIZE:
-                    messagebox.showwarning("Attention", f"Fichier trop volumineux : {path}")
-                    continue
+                # Only check file size if uncap_size is False
+                if not compression_settings.get('uncap_size', False):
+                    if os.path.getsize(path) > MAX_FILE_SIZE:
+                        messagebox.showwarning("Attention", f"Fichier trop volumineux : {path}")
+                        continue
                 files_listbox.insert(tk.END, os.path.basename(path))
                 compression_queue.put(path)
                 pending_files.append(path)
@@ -125,10 +127,19 @@ def build_settings_tab(notebook):
     
     # Delete originals checkbox
     delete_original_var = tk.BooleanVar(value=False)
-    ttk.Checkbutton(settings, text="Supprimer les fichiers originaux après compression", variable=delete_original_var)\
+    ttk.Checkbutton(settings, text="Supprimer les fichiers originaux après compression", 
+                    variable=delete_original_var)\
         .grid(row=2, column=0, columnspan=2, padx=5, pady=5, sticky="w")
     
-    return None  # Settings state can be stored globally if needed.
+    # Add uncap file size checkbox
+    uncap_var = tk.BooleanVar(value=compression_settings.get('uncap_size', False))
+    def update_uncap(*args):
+        compression_settings['uncap_size'] = uncap_var.get()
+    ttk.Checkbutton(settings, text="Désactiver la limite de taille des fichiers (20GB)", 
+                    variable=uncap_var, command=update_uncap)\
+        .grid(row=3, column=0, columnspan=2, padx=5, pady=5, sticky="w")
+    
+    return None
 
 def build_performance_tab(notebook):
     perf_frame = ttk.Frame(notebook)

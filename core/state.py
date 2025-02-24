@@ -17,7 +17,8 @@ compression_settings = {
     'quality': int(config.get("Compression", "quality", fallback="23")),
     'preset': config.get("Compression", "preset", fallback="medium"),  # Fixed: removed extra parenthesis
     'threads': int(config.get("Compression", "threads", fallback="2")),
-    'use_nvenc': config.getboolean("Compression", "use_nvenc", fallback=False)
+    'use_nvenc': config.getboolean("Compression", "use_nvenc", fallback=False),
+    'uncap_size': config.getboolean("Compression", "uncap_size", fallback=False)  # Add new setting
 }
 
 # New: List to track pending files
