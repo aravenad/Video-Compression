@@ -11,28 +11,41 @@ def rename_files(folder):
         shutil.rmtree(temp_dir)
     os.makedirs(temp_dir)
     
-    pattern = re.compile(r'^(\d{3})(\.[^\.]+)$')
+    # Updated pattern to also match numbers in filenames ending with _compressed
+    base_pattern = re.compile(r'^(\d{3})(\.[^\.]+)$')
+    compressed_pattern = re.compile(r'^(\d{3})_compressed(\.[^\.]+)$')
+    
     max_num = -1
     to_rename = []
     correct_files = []
+    
     for f in os.listdir(folder):
-        # Exclude files with '_compressed' in their name
-        if '_compressed' in f:
-            continue
         full_path = os.path.join(folder, f)
         if os.path.isfile(full_path):
-            m = pattern.match(f)
+            # Check for regular numbered files
+            m = base_pattern.match(f)
             if m:
                 num = int(m.group(1))
                 max_num = max(max_num, num)
                 correct_files.append(f)
-            else:
+                continue
+            
+            # Check for _compressed files to update max_num but don't move them
+            m = compressed_pattern.match(f)
+            if m:
+                num = int(m.group(1))
+                max_num = max(max_num, num)
+                continue
+                
+            # If file doesn't match either pattern and isn't a _compressed file
+            if '_compressed' not in f:
                 to_rename.append(f)
 
-    # Move correct files to temporary folder to avoid collisions
+    # Move correct files to temporary folder
     for f in correct_files:
         shutil.move(os.path.join(folder, f), os.path.join(temp_dir, f))
 
+    # Rename files starting from the next available number
     next_num = max_num + 1 if max_num != -1 else 0
     for f in to_rename:
         src_path = os.path.join(folder, f)
@@ -42,6 +55,7 @@ def rename_files(folder):
             os.rename(src_path, os.path.join(folder, new_name))
             next_num += 1
 
+    # Move back the original numbered files
     for f in os.listdir(temp_dir):
         shutil.move(os.path.join(temp_dir, f), os.path.join(folder, f))
     os.rmdir(temp_dir)
