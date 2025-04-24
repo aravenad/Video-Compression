@@ -6,22 +6,14 @@ import (
 )
 
 // Compress invokes ffmpeg with args based on the preset.
-// For now, we’ll just print a stub.
-func Compress(input, output, preset string) error {
-	// TODO: map preset → []string of ffmpeg args (e.g. "-c:v libx264", ...)
-	args := []string{
-		"-i", input,
-		// placeholder: override output
-		output,
-	}
+func Compress(input, output string, args []string) error {
+	fullArgs := []string{"-i", input}
+	fullArgs = append(fullArgs, args...)
+	fullArgs = append(fullArgs, output)
 
-	fmt.Printf("Running: ffmpeg %v\n", args)
-	cmd := exec.Command("ffmpeg", args...)
+	fmt.Printf("Running: ffmpeg %v\n", fullArgs)
+	cmd := exec.Command("ffmpeg", fullArgs...)
 	cmd.Stdout = nil
 	cmd.Stderr = nil
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("ffmpeg error: %w", err)
-	}
-	return nil
+	return cmd.Run()
 }
