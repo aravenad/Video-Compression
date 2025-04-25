@@ -1,3 +1,4 @@
+// Package compressor unit tests
 package compressor
 
 import (

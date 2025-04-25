@@ -55,13 +55,15 @@
 			<div id="nav">
 				<select id="files">
 				
-				<option value="file0">github.com/yourorg/video-compressor/cmd/compress/root.go (92.9%)</option>
+				<option value="file0">github.com/yourorg/video-compressor/cmd/compress/root.go (100.0%)</option>
 				
-				<option value="file1">github.com/yourorg/video-compressor/cmd/compress/utils.go (90.0%)</option>
+				<option value="file1">github.com/yourorg/video-compressor/cmd/compress/utils.go (100.0%)</option>
 				
 				<option value="file2">github.com/yourorg/video-compressor/internal/compressor/compressor.go (100.0%)</option>
 				
-				<option value="file3">github.com/yourorg/video-compressor/internal/presets/presets.go (84.2%)</option>
+				<option value="file3">github.com/yourorg/video-compressor/internal/presets/presets.go (100.0%)</option>
+				
+				<option value="file4">github.com/yourorg/video-compressor/internal/queue/queue.go (100.0%)</option>
 				
 				</select>
 			</div>
@@ -75,111 +77,219 @@
 		</div>
 		<div id="content">
 		
-		<pre class="file" id="file0" style="display: none">package main
+		<pre class="file" id="file0" style="display: none">// Package main implements the CLI for the video compression tool.
+package main
 
 import (
         "fmt"
         "os"
+        "path/filepath"
 
         "github.com/spf13/cobra"
-        "github.com/spf13/viper"
 
         "github.com/yourorg/video-compressor/internal/presets"
+        "github.com/yourorg/video-compressor/internal/queue"
 )
 
-// global flags
 var (
-        output   string
-        preset   string
-        parallel int
+        // Command-line flags
+        output     string // Output file or directory
+        parallel   int    // Number of parallel compression jobs
+        presetName string // Preset name to use
+        configDir  string // Directory for preset YAML files
 )
 
-// newRootCmd builds (but does not execute) the CLI command.
-func newRootCmd() *cobra.Command <span class="cov8" title="1">{
-        cmd := &amp;cobra.Command{
-                Use:   "compress [flags] &lt;file1&gt; [file2] [...]",
-                Short: "Video compressor CLI",
-                Long:  "A fast, single-binary Go CLI for cross-platform video compression.",
-                Args:  cobra.MinimumNArgs(1),
-                RunE:  runCompress,
-        }
-
-        cmd.Flags().StringVarP(&amp;output, "output", "o", "", "Output file or directory")
-        cmd.Flags().StringVarP(&amp;preset, "preset", "p", "default", "Compression preset name")
-        cmd.Flags().IntVarP(&amp;parallel, "jobs", "j", 1, "Number of parallel jobs")
-        viper.BindPFlag("preset", cmd.Flags().Lookup("preset"))
-
-        return cmd
-}</span>
-
-func main() <span class="cov0" title="0">{
-        if err := newRootCmd().Execute(); err != nil </span><span class="cov0" title="0">{
+func main() <span class="cov8" title="1">{
+        if err := newRootCmd().Execute(); err != nil </span><span class="cov8" title="1">{
                 fmt.Fprintln(os.Stderr, err)
-                os.Exit(1)
+                osExit(1)
         }</span>
 }
 
+func newRootCmd() *cobra.Command <span class="cov8" title="1">{
+        root := &amp;cobra.Command{
+                Use:   "video-compress",
+                Short: "Video Compressor: compress videos and manage presets",
+        }
+
+        // Global config directory for presets
+        root.PersistentFlags().StringVarP(&amp;configDir, "config", "c", "config/", "Directory for preset YAML files")
+
+        // compress subcommand
+        compressCmd := &amp;cobra.Command{
+                Use:   "compress [flags] &lt;file1&gt; [file2…]",
+                Short: "Compress one or more videos",
+                Args:  cobra.MinimumNArgs(1),
+                RunE:  runCompress,
+        }
+        compressCmd.Flags().IntVarP(&amp;parallel, "jobs", "j", 1, "Parallel compression jobs")
+        compressCmd.Flags().StringVarP(&amp;output, "output", "o", "", "Output file or directory")
+        compressCmd.Flags().StringVarP(&amp;presetName, "preset", "p", "default", "Preset name to use")
+        // preset overrides
+        compressCmd.Flags().String("video-codec", "", "Override video codec from preset")
+        compressCmd.Flags().String("ffpreset", "", "Override ffmpeg preset from preset")
+        compressCmd.Flags().Int("crf", -1, "Override CRF value from preset")
+
+        root.AddCommand(compressCmd)
+        root.AddCommand(newPresetsCmd())
+        return root
+}</span>
+
 func runCompress(cmd *cobra.Command, args []string) error <span class="cov8" title="1">{
-        // 1. Load presets via the hookable func
-        allPresets, err := loadPresetsFunc()
+        // Set config file path
+        presets.ConfigFile = filepath.Join(configDir, "default.yaml")
+
+        // 1. Load presets
+        all, err := loadPresetsFunc()
         if err != nil </span><span class="cov8" title="1">{
-                return fmt.Errorf("loading presets: %w", err)
+                return fmt.Errorf("loading presets from %s: %w", presets.ConfigFile, err)
         }</span>
-        <span class="cov8" title="1">p, ok := allPresets[preset]
+        <span class="cov8" title="1">p, ok := all[presetName]
         if !ok </span><span class="cov8" title="1">{
-                return fmt.Errorf("unknown preset %q; available: %v", preset, keys(allPresets))
+                return fmt.Errorf("unknown preset %q; available: %v", presetName, presets.ListNames(all))
         }</span>
 
-        // 2. Build ffmpeg args
+        // 2. Apply overrides
+        <span class="cov8" title="1">if vc := mustGetString(cmd, "video-codec"); vc != "" </span><span class="cov8" title="1">{
+                p.VideoCodec = vc
+        }</span>
+        <span class="cov8" title="1">if pf := mustGetString(cmd, "ffpreset"); pf != "" </span><span class="cov8" title="1">{
+                p.Preset = pf
+        }</span>
+        <span class="cov8" title="1">if crf := mustGetInt(cmd, "crf"); crf &gt;= 0 </span><span class="cov8" title="1">{
+                p.CRF = crf
+        }</span>
+
+        // 3. Build ffmpeg args
         <span class="cov8" title="1">ffArgs := presets.BuildFFArgs(p)
 
-        // 3. Concurrency
-        sem := make(chan struct{}, parallel)
-        errs := make(chan error, len(args))
-        for _, infile := range args </span><span class="cov8" title="1">{
-                sem &lt;- struct{}{}
-                go func(in string) </span><span class="cov8" title="1">{
-                        defer func() </span><span class="cov8" title="1">{ &lt;-sem }</span>()
-                        <span class="cov8" title="1">out := deriveOutput(in, output)
-                        if err := compressFunc(in, out, ffArgs); err != nil </span><span class="cov8" title="1">{
-                                errs &lt;- fmt.Errorf("%s: %w", in, err)
-                                return
-                        }</span>
-                        // Report success into Cobra’s output writer
-                        <span class="cov8" title="1">cmd.Println("✓", in)
-                        errs &lt;- nil</span>
-                }(infile)
-        }
+        // 4. Initialize queue
+        q := queue.New(parallel)
 
-        // 4. Wait &amp; report
-        <span class="cov8" title="1">var failed bool
-        for i := 0; i &lt; len(args); i++ </span><span class="cov8" title="1">{
-                if err := &lt;-errs; err != nil </span><span class="cov8" title="1">{
-                        // Send errors to the command’s error writer
-                        fmt.Fprintln(cmd.ErrOrStderr(), err)
-                        failed = true
-                }</span>
-        }
-        <span class="cov8" title="1">if failed </span><span class="cov8" title="1">{
-                return fmt.Errorf("one or more files failed to compress")
+        // 5. Enqueue tasks
+        for _, in := range args </span><span class="cov8" title="1">{
+                dest := deriveOutput(in, output)
+                q.Add(queue.Task{Source: in, Destination: dest, Args: ffArgs})
         }</span>
 
-        // Final success message via Cobra
+        // 6. Run queue
+        <span class="cov8" title="1">results := q.Run()
+
+        // 7. Summarize
+        successes, failures := 0, 0
+        for _, r := range results </span><span class="cov8" title="1">{
+                if r.Err != nil </span><span class="cov8" title="1">{
+                        fmt.Fprintf(os.Stderr, "Error compressing %s: %v\n", r.Task.Source, r.Err)
+                        failures++
+                }</span> else<span class="cov8" title="1"> {
+                        cmd.Println("✓", r.Task.Source)
+                        successes++
+                }</span>
+        }
+        <span class="cov8" title="1">if failures &gt; 0 </span><span class="cov8" title="1">{
+                return fmt.Errorf("one or more files failed to compress")
+        }</span>
         <span class="cov8" title="1">cmd.Println("All done!")
         return nil</span>
 }
 
-// keys as before...
-func keys(m map[string]presets.Preset) []string <span class="cov8" title="1">{
-        ks := make([]string, 0, len(m))
-        for k := range m </span><span class="cov8" title="1">{
-                ks = append(ks, k)
+func newPresetsCmd() *cobra.Command <span class="cov8" title="1">{
+        pcmd := &amp;cobra.Command{
+                Use:   "presets",
+                Short: "Manage compression presets",
+        }
+
+        // Ensure using the correct config file
+        pcmd.PersistentPreRun = func(cmd *cobra.Command, args []string) </span><span class="cov8" title="1">{
+                presets.ConfigFile = filepath.Join(configDir, "default.yaml")
         }</span>
-        <span class="cov8" title="1">return ks</span>
+
+        // list
+        <span class="cov8" title="1">pcmd.AddCommand(&amp;cobra.Command{
+                Use:   "list",
+                Short: "List all presets",
+                RunE: func(cmd *cobra.Command, _ []string) error </span><span class="cov8" title="1">{
+                        all, err := loadPresetsFunc()
+                        if err != nil </span><span class="cov8" title="1">{
+                                return fmt.Errorf("loading presets from %s: %w", presets.ConfigFile, err)
+                        }</span>
+                        <span class="cov8" title="1">for _, name := range presets.ListNames(all) </span><span class="cov8" title="1">{
+                                cmd.Println(name)
+                        }</span>
+                        <span class="cov8" title="1">return nil</span>
+                },
+        })
+
+        // add
+        <span class="cov8" title="1">add := &amp;cobra.Command{
+                Use:   "add &lt;name&gt;",
+                Short: "Add or overwrite a preset",
+                Args: func(cmd *cobra.Command, args []string) error </span><span class="cov8" title="1">{
+                        if len(args) != 1 </span><span class="cov8" title="1">{
+                                return fmt.Errorf("requires exactly 1 arg")
+                        }</span>
+                        <span class="cov8" title="1">return nil</span>
+                },
+                RunE: func(cmd *cobra.Command, args []string) error <span class="cov8" title="1">{
+                        p := presets.Preset{
+                                VideoCodec: mustGetString(cmd, "video-codec"),
+                                Preset:     mustGetString(cmd, "preset"),
+                                CRF:        mustGetInt(cmd, "crf"),
+                        }
+                        if err := savePresetFunc(args[0], p); err != nil </span><span class="cov8" title="1">{
+                                return fmt.Errorf("saving preset %s: %w", args[0], err)
+                        }</span>
+                        <span class="cov8" title="1">return nil</span>
+                },
+        }
+        <span class="cov8" title="1">add.Flags().String("video-codec", "libx264", "ffmpeg video codec")
+        add.Flags().String("preset", "medium", "ffmpeg preset")
+        add.Flags().Int("crf", 23, "ffmpeg CRF value")
+        pcmd.AddCommand(add)
+
+        // remove
+        rm := &amp;cobra.Command{
+                Use:   "remove &lt;name&gt;",
+                Short: "Delete a named preset",
+                Args: func(cmd *cobra.Command, args []string) error </span><span class="cov8" title="1">{
+                        if len(args) != 1 </span><span class="cov8" title="1">{
+                                return fmt.Errorf("requires exactly 1 arg")
+                        }</span>
+                        <span class="cov8" title="1">return nil</span>
+                },
+                RunE: func(cmd *cobra.Command, args []string) error <span class="cov8" title="1">{
+                        if err := deletePresetFunc(args[0]); err != nil </span><span class="cov8" title="1">{
+                                return fmt.Errorf("deleting preset %s: %w", args[0], err)
+                        }</span>
+                        <span class="cov8" title="1">return nil</span>
+                },
+        }
+        <span class="cov8" title="1">pcmd.AddCommand(rm)
+
+        return pcmd</span>
+}
+
+// mustGetString retrieves a string flag or panics
+func mustGetString(cmd *cobra.Command, name string) string <span class="cov8" title="1">{
+        s, err := cmd.Flags().GetString(name)
+        if err != nil </span><span class="cov8" title="1">{
+                panic(err)</span>
+        }
+        <span class="cov8" title="1">return s</span>
+}
+
+// mustGetInt retrieves an int flag or panics
+func mustGetInt(cmd *cobra.Command, name string) int <span class="cov8" title="1">{
+        i, err := cmd.Flags().GetInt(name)
+        if err != nil </span><span class="cov8" title="1">{
+                panic(err)</span>
+        }
+        <span class="cov8" title="1">return i</span>
 }
 </pre>
 		
-		<pre class="file" id="file1" style="display: none">package main
+		<pre class="file" id="file1" style="display: none">// This file contains utility functions for the compress command.
+package main
 
 import (
         "os"
@@ -189,35 +299,35 @@ import (
 
 // deriveOutput returns the output file path for a given input file.
 // Behavior:
-// 1. If output == "": place alongside the input file, appending "-compressed" to the basename.
-// 2. If output exists and is a directory, place the file inside it, keeping the same basename.
-// 3. If output ends with a path separator, treat it as a directory.
-// 4. Otherwise, treat output as the explicit file path.
+//  1. If output == "": place alongside the input file, appending "-compressed" to the basename.
+//  2. If output exists and is a directory, place the file inside it, keeping the same basename.
+//  3. If output ends with a path separator, treat it as a directory.
+//  4. Otherwise, treat output as the explicit file path.
+//
+// Examples:
+//   - deriveOutput("video.mp4", "") -&gt; "video-compressed.mp4" (in same directory)
+//   - deriveOutput("video.mp4", "out/") -&gt; "out/video.mp4"
+//   - deriveOutput("video.mp4", "renamed.mp4") -&gt; "renamed.mp4"
 func deriveOutput(infile, output string) string <span class="cov8" title="1">{
-        // 1. No output provided: generate alongside infile
         if output == "" </span><span class="cov8" title="1">{
                 dir := filepath.Dir(infile)
                 ext := filepath.Ext(infile)
                 name := strings.TrimSuffix(filepath.Base(infile), ext)
                 return filepath.Join(dir, name+"-compressed"+ext)
         }</span>
-
-        // 2. If it's an existing directory, drop file inside
         <span class="cov8" title="1">if info, err := os.Stat(output); err == nil &amp;&amp; info.IsDir() </span><span class="cov8" title="1">{
                 return filepath.Join(output, filepath.Base(infile))
         }</span>
-
-        // 3. If it ends with a slash, treat as directory (even if not existing yet)
-        <span class="cov8" title="1">if strings.HasSuffix(output, string(os.PathSeparator)) </span><span class="cov0" title="0">{
+        <span class="cov8" title="1">if strings.HasSuffix(output, string(os.PathSeparator)) || strings.HasSuffix(output, "/") </span><span class="cov8" title="1">{
                 return filepath.Join(output, filepath.Base(infile))
         }</span>
-
-        // 4. Otherwise, use exact output path
         <span class="cov8" title="1">return output</span>
 }
 </pre>
 		
-		<pre class="file" id="file2" style="display: none">package compressor
+		<pre class="file" id="file2" style="display: none">// Package compressor provides video compression functionality by invoking
+// external ffmpeg processes with appropriate arguments.
+package compressor
 
 import (
         "fmt"
@@ -225,6 +335,12 @@ import (
 )
 
 // Compress invokes ffmpeg with args based on the preset.
+// Parameters:
+//   - input: path to input video file
+//   - output: path where output will be written
+//   - args: additional ffmpeg arguments, typically from presets.BuildFFArgs
+//
+// Returns an error if ffmpeg execution fails.
 func Compress(input, output string, args []string) error <span class="cov8" title="1">{
         fullArgs := []string{"-i", input}
         fullArgs = append(fullArgs, args...)
@@ -238,56 +354,65 @@ func Compress(input, output string, args []string) error <span class="cov8" titl
 }</span>
 </pre>
 		
-		<pre class="file" id="file3" style="display: none">package presets
+		<pre class="file" id="file3" style="display: none">// Package presets provides functionality for managing ffmpeg encoding presets
+// stored in YAML configuration files.
+package presets
 
 import (
         "fmt"
+        "os"
+        "sort"
 
-        "github.com/spf13/viper"
+        "path/filepath"
+
+        "gopkg.in/yaml.v3"
+)
+
+var (
+        // ConfigFile is the path to the YAML file with presets.
+        ConfigFile = "config/default.yaml"
+
+        // yamlMarshal is a variable to allow mocking in tests
+        yamlMarshal = yaml.Marshal
 )
 
 // Preset holds all the ffmpeg settings for one named preset.
+// The Name field is not stored in YAML but populated from the map key.
 type Preset struct {
-        Name       string
-        VideoCodec string `mapstructure:"video_codec"`
-        CRF        int    `mapstructure:"crf"`
-        Preset     string `mapstructure:"preset"` // e.g. “medium”, “fast”
+        Name       string `yaml:"-"`
+        VideoCodec string `mapstructure:"video_codec" yaml:"video_codec"`
+        CRF        int    `mapstructure:"crf"           yaml:"crf"`
+        Preset     string `mapstructure:"preset"        yaml:"preset"`
 }
 
-// LoadAll reads config/default.yaml into Viper and unmarshals into a map of Presets.
-// It searches for the config file in "config/", "../config/", and "../../config/" to support tests.
+// LoadAll reads ConfigFile directly and unmarshals into a map of Presets.
+// Returns error if the file cannot be read or parsed.
 func LoadAll() (map[string]Preset, error) <span class="cov8" title="1">{
-        viper.SetConfigName("default")
-        // Search project config directory when running at root
-        viper.AddConfigPath("config")
-        // Support tests running from internal/presets
-        viper.AddConfigPath("../config")
-        // Support tests running from internal/presets subdir on different CWD
-        viper.AddConfigPath("../../config")
-
-        if err := viper.ReadInConfig(); err != nil </span><span class="cov0" title="0">{
+        // 1. Read the YAML file (may be test-overridden via ConfigFile)
+        data, err := os.ReadFile(ConfigFile)
+        if err != nil </span><span class="cov8" title="1">{
                 return nil, fmt.Errorf("reading presets config: %w", err)
         }</span>
 
-        <span class="cov8" title="1">raw := viper.GetStringMap("presets")
-        result := make(map[string]Preset, len(raw))
+        // 2. Unmarshal into an aux struct
+        <span class="cov8" title="1">aux := struct {
+                Presets map[string]Preset `yaml:"presets"`
+        }{}
+        if err := yaml.Unmarshal(data, &amp;aux); err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("parsing presets config: %w", err)
+        }</span>
 
-        for name := range raw </span><span class="cov8" title="1">{
-                sub := viper.Sub("presets." + name)
-                if sub == nil </span><span class="cov0" title="0">{
-                        continue</span>
-                }
-                <span class="cov8" title="1">var p Preset
-                if err := sub.Unmarshal(&amp;p); err != nil </span><span class="cov0" title="0">{
-                        return nil, fmt.Errorf("unmarshal preset %q: %w", name, err)
-                }</span>
-                <span class="cov8" title="1">p.Name = name
-                result[name] = p</span>
-        }
-        <span class="cov8" title="1">return result, nil</span>
+        // 3. Wire up Name fields
+        <span class="cov8" title="1">for name, p := range aux.Presets </span><span class="cov8" title="1">{
+                p.Name = name
+                aux.Presets[name] = p
+        }</span>
+
+        <span class="cov8" title="1">return aux.Presets, nil</span>
 }
 
 // BuildFFArgs turns a Preset into ffmpeg CLI args (minus input/output).
+// Returns a slice of strings suitable for passing to exec.Command.
 func BuildFFArgs(p Preset) []string <span class="cov8" title="1">{
         return []string{
                 "-c:v", p.VideoCodec,
@@ -295,6 +420,176 @@ func BuildFFArgs(p Preset) []string <span class="cov8" title="1">{
                 "-crf", fmt.Sprintf("%d", p.CRF),
         }
 }</span>
+
+// Save writes or overwrites the preset named name to the config file.
+// Creates the config file and directories if they don't exist.
+func Save(name string, p Preset) error <span class="cov8" title="1">{
+        // 1. Read existing file (or start fresh)
+        cfg := struct {
+                Presets map[string]Preset `yaml:"presets"`
+        }{}
+        data, err := os.ReadFile(ConfigFile)
+        if err != nil &amp;&amp; !os.IsNotExist(err) </span><span class="cov8" title="1">{
+                return fmt.Errorf("reading config: %w", err)
+        }</span>
+        <span class="cov8" title="1">if len(data) &gt; 0 </span><span class="cov8" title="1">{
+                if err := yaml.Unmarshal(data, &amp;cfg); err != nil </span><span class="cov8" title="1">{
+                        return fmt.Errorf("parsing config: %w", err)
+                }</span>
+        }
+        <span class="cov8" title="1">if cfg.Presets == nil </span><span class="cov8" title="1">{
+                cfg.Presets = make(map[string]Preset)
+        }</span>
+
+        // 2. Insert or overwrite
+        <span class="cov8" title="1">p.Name = name
+        cfg.Presets[name] = p
+
+        // 3. Write back
+        out, err := yamlMarshal(&amp;cfg)
+        if err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("serializing config: %w", err)
+        }</span>
+        <span class="cov8" title="1">if err := os.MkdirAll(filepath.Dir(ConfigFile), 0o755); err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("creating config dir: %w", err)
+        }</span>
+        <span class="cov8" title="1">if err := os.WriteFile(ConfigFile, out, 0o644); err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("writing config: %w", err)
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+// Delete removes the named preset from the config file.
+// Returns error if the file doesn't exist or cannot be modified.
+func Delete(name string) error <span class="cov8" title="1">{
+        cfg := struct {
+                Presets map[string]Preset `yaml:"presets"`
+        }{}
+        data, err := os.ReadFile(ConfigFile)
+        if err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("reading config: %w", err)
+        }</span>
+        <span class="cov8" title="1">if err := yaml.Unmarshal(data, &amp;cfg); err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("parsing config: %w", err)
+        }</span>
+        <span class="cov8" title="1">delete(cfg.Presets, name)
+
+        out, err := yamlMarshal(&amp;cfg)
+        if err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("serializing config: %w", err)
+        }</span>
+        <span class="cov8" title="1">if err := os.WriteFile(ConfigFile, out, 0o644); err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("writing config: %w", err)
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+// ListNames returns the sorted list of preset names.
+// This ensures consistent ordering for display purposes.
+func ListNames(all map[string]Preset) []string <span class="cov8" title="1">{
+        names := make([]string, 0, len(all))
+        for n := range all </span><span class="cov8" title="1">{
+                names = append(names, n)
+        }</span>
+        <span class="cov8" title="1">sort.Strings(names)
+        return names</span>
+}
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package queue
+
+import (
+        "sync"
+
+        "github.com/yourorg/video-compressor/internal/compressor"
+)
+
+// Task represents one compression job, including the ffmpeg arguments to use.
+type Task struct {
+        Source      string   // input path
+        Destination string   // output path
+        Args        []string // ffmpeg args (e.g. from presets.BuildFFArgs)
+}
+
+// Result holds the outcome of a Task.
+type Result struct {
+        Task Task
+        Err  error
+}
+
+// Queue manages and runs tasks concurrently.
+type Queue struct {
+        tasks       []Task
+        concurrency int
+}
+
+// Define a variable for the compress function to allow mocking in tests
+var compressFunc = compressor.Compress
+
+// GetCompressFunc returns the current compressFunc - useful for testing
+func GetCompressFunc() func(string, string, []string) error <span class="cov8" title="1">{
+        return compressFunc
+}</span>
+
+// SetCompressFunc replaces the current compressFunc - useful for testing
+func SetCompressFunc(fn func(string, string, []string) error) <span class="cov8" title="1">{
+        compressFunc = fn
+}</span>
+
+// New creates a Queue with a given concurrency level.
+func New(concurrency int) *Queue <span class="cov8" title="1">{
+        return &amp;Queue{
+                concurrency: concurrency,
+                tasks:       make([]Task, 0),
+        }
+}</span>
+
+// Add enqueues a Task.
+func (q *Queue) Add(task Task) <span class="cov8" title="1">{
+        q.tasks = append(q.tasks, task)
+}</span>
+
+// Run processes all queued tasks and blocks until done.
+// It returns a slice of Results corresponding to each Task.
+func (q *Queue) Run() []Result <span class="cov8" title="1">{
+        taskChan := make(chan Task)
+        resultChan := make(chan Result)
+        var wg sync.WaitGroup
+
+        // Start worker goroutines
+        for i := 0; i &lt; q.concurrency; i++ </span><span class="cov8" title="1">{
+                wg.Add(1)
+                go func() </span><span class="cov8" title="1">{
+                        defer wg.Done()
+                        for task := range taskChan </span><span class="cov8" title="1">{
+                                err := compressFunc(task.Source, task.Destination, task.Args)
+                                resultChan &lt;- Result{Task: task, Err: err}
+                        }</span>
+                }()
+        }
+
+        // Feed tasks into taskChan
+        <span class="cov8" title="1">go func() </span><span class="cov8" title="1">{
+                for _, task := range q.tasks </span><span class="cov8" title="1">{
+                        taskChan &lt;- task
+                }</span>
+                <span class="cov8" title="1">close(taskChan)</span>
+        }()
+
+        // Close resultChan once all workers are done
+        <span class="cov8" title="1">go func() </span><span class="cov8" title="1">{
+                wg.Wait()
+                close(resultChan)
+        }</span>()
+
+        // Collect results
+        <span class="cov8" title="1">results := make([]Result, 0, len(q.tasks))
+        for res := range resultChan </span><span class="cov8" title="1">{
+                results = append(results, res)
+        }</span>
+
+        <span class="cov8" title="1">return results</span>
+}
 </pre>
 		
 		</div>

@@ -11,8 +11,12 @@
 # Test binary, built with `go test -c`
 *.test
 
+# videos in testdata directory
+*.mp4
+
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+coverage.html
 
 # Dependency directories (remove the comment below to include it)
 # vendor/

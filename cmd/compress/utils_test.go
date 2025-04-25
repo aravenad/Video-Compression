@@ -1,3 +1,4 @@
+// Tests for utility functions
 package main
 
 import (
@@ -7,15 +8,20 @@ import (
 	"testing"
 )
 
+// TestDeriveOutput verifies the output path derivation logic for different scenarios:
+// - No output specified
+// - Output is a directory
+// - Output has trailing slash
+// - Output is an explicit filename
 func TestDeriveOutput(t *testing.T) {
-	// Prepare a real temp dir for the “existing directory” case
+	// Prepare a real temp dir for the "existing directory" case
 	tmpDir := t.TempDir()
 
 	tests := []struct {
 		name     string
 		infile   string
 		output   string
-		wantEnds string // we’ll just check suffix or exact match
+		wantEnds string // we'll just check suffix or exact match
 	}{
 		{
 			name:     "no output → same dir with -compressed",

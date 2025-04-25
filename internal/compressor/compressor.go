@@ -1,3 +1,5 @@
+// Package compressor provides video compression functionality by invoking
+// external ffmpeg processes with appropriate arguments.
 package compressor
 
 import (
@@ -6,6 +8,12 @@ import (
 )
 
 // Compress invokes ffmpeg with args based on the preset.
+// Parameters:
+//   - input: path to input video file
+//   - output: path where output will be written
+//   - args: additional ffmpeg arguments, typically from presets.BuildFFArgs
+//
+// Returns an error if ffmpeg execution fails.
 func Compress(input, output string, args []string) error {
 	fullArgs := []string{"-i", input}
 	fullArgs = append(fullArgs, args...)
