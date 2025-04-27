@@ -25,8 +25,8 @@ coverage.html
 go.work
 go.work.sum
 
-# env file
-.env
+# Build directories
+dist/
 
 # VS Code settings
 .vscode/
