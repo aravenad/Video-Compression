@@ -11,7 +11,7 @@ GO          = go
 # Target platforms (os_arch)
 PLATFORMS = darwin_amd64 linux_amd64 windows_amd64
 
-.PHONY: all tidy build checksum clean
+.PHONY: all tidy build checksum clean ensure-config
 
 # Default target: tidy, build all, then generate checksums
 all: tidy build checksum
@@ -20,8 +20,23 @@ all: tidy build checksum
 tidy:
 	$(GO) mod tidy
 
+# Ensure config directory exists with default configuration
+ensure-config:
+	@mkdir -p config
+	@if [ ! -f config/default.yaml ]; then \
+		echo "Creating default config file..."; \
+		echo "# Default configuration for video-compress" > config/default.yaml; \
+		echo "output:" >> config/default.yaml; \
+		echo "  format: mp4" >> config/default.yaml; \
+		echo "  quality: high" >> config/default.yaml; \
+		echo "" >> config/default.yaml; \
+		echo "compression:" >> config/default.yaml; \
+		echo "  preset: medium" >> config/default.yaml; \
+		echo "  crf: 23" >> config/default.yaml; \
+	fi
+
 # Build for all defined platforms
-build: $(PLATFORMS:%=build-%)
+build: ensure-config $(PLATFORMS:%=build-%)
 
 # Platform-specific build rule with .exe for Windows
 build-%:
@@ -34,7 +49,8 @@ build-%:
 	else \
 		GOOS=$$OS GOARCH=$$ARCH $(GO) build $(GOFLAGS) -ldflags="$(LDFLAGS)" \
 			-o $(DIST_DIR)/$*/$(BINARY_NAME) ./cmd/compress; \
-	fi
+	fi; \
+	cp -r config $(DIST_DIR)/$*/
 
 # Generate SHA256 checksums for all built artifacts
 checksum: build
