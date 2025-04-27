@@ -187,6 +187,37 @@ func newPresetsCmd() *cobra.Command {
 	}
 	pcmd.AddCommand(rm)
 
+	// show
+	show := &cobra.Command{
+		Use:   "show <name>",
+		Short: "Show details of a preset",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("requires exactly 1 arg")
+			}
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			all, err := loadPresetsFunc()
+			if err != nil {
+				return fmt.Errorf("loading presets from %s: %w", presets.ConfigFile, err)
+			}
+
+			p, ok := all[args[0]]
+			if !ok {
+				return fmt.Errorf("preset %q not found; available: %v", args[0], presets.ListNames(all))
+			}
+
+			cmd.Printf("Preset: %s\n", args[0])
+			cmd.Printf("Video codec: %s\n", p.VideoCodec)
+			cmd.Printf("FFmpeg preset: %s\n", p.Preset)
+			cmd.Printf("CRF value: %d\n", p.CRF)
+
+			return nil
+		},
+	}
+	pcmd.AddCommand(show)
+
 	return pcmd
 }
 

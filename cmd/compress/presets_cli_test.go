@@ -240,3 +240,120 @@ func TestCLI_Compress_WithJobsAndOutput(t *testing.T) {
 		t.Errorf("unexpected output:\n%s", out)
 	}
 }
+
+// TestCLI_PresetsShow verifies the show command correctly displays preset details
+func TestCLI_PresetsShow(t *testing.T) {
+	// stub out loadPresetsFunc
+	origLoad := loadPresetsFunc
+	defer func() { loadPresetsFunc = origLoad }()
+	loadPresetsFunc = func() (map[string]presets.Preset, error) {
+		return map[string]presets.Preset{
+			"test-preset": {
+				VideoCodec: "libx264",
+				Preset:     "slow",
+				CRF:        22,
+			},
+		}, nil
+	}
+
+	cmd := newRootCmd()
+	buf := &bytes.Buffer{}
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"presets", "show", "test-preset"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("presets show failed: %v", err)
+	}
+
+	output := buf.String()
+	expectedContent := []string{
+		"Preset: test-preset",
+		"Video codec: libx264",
+		"FFmpeg preset: slow",
+		"CRF value: 22",
+	}
+
+	for _, expected := range expectedContent {
+		if !strings.Contains(output, expected) {
+			t.Errorf("Expected output to contain %q, got:\n%s", expected, output)
+		}
+	}
+}
+
+// TestCLI_PresetsShow_LoadError verifies error handling when presets can't be loaded
+func TestCLI_PresetsShow_LoadError(t *testing.T) {
+	orig := loadPresetsFunc
+	defer func() { loadPresetsFunc = orig }()
+	loadPresetsFunc = func() (map[string]presets.Preset, error) {
+		return nil, fmt.Errorf("failed to load presets")
+	}
+
+	cmd := newRootCmd()
+	buf := &bytes.Buffer{}
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"presets", "show", "any-preset"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error when presets can't be loaded, got nil")
+	}
+	if !strings.Contains(err.Error(), "loading presets") {
+		t.Errorf("expected 'loading presets' error, got: %v", err)
+	}
+}
+
+// TestCLI_PresetsShow_NotFound verifies error handling when the preset doesn't exist
+func TestCLI_PresetsShow_NotFound(t *testing.T) {
+	orig := loadPresetsFunc
+	defer func() { loadPresetsFunc = orig }()
+	loadPresetsFunc = func() (map[string]presets.Preset, error) {
+		return map[string]presets.Preset{"existing": {}}, nil
+	}
+
+	cmd := newRootCmd()
+	buf := &bytes.Buffer{}
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"presets", "show", "nonexistent"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for nonexistent preset, got nil")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected 'not found' error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "existing") {
+		t.Errorf("expected available presets in error message, got: %v", err)
+	}
+}
+
+// TestCLI_PresetsShow_NoArgs verifies the command validates that exactly one argument is provided
+func TestCLI_PresetsShow_NoArgs(t *testing.T) {
+	cmd := newRootCmd()
+	buf := &bytes.Buffer{}
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+
+	// Test with no arguments
+	cmd.SetArgs([]string{"presets", "show"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected an error when no args provided")
+	}
+	if !strings.Contains(err.Error(), "requires exactly 1 arg") {
+		t.Errorf("expected 'requires exactly 1 arg' error, got: %v", err)
+	}
+
+	// Test with too many arguments
+	cmd.SetArgs([]string{"presets", "show", "preset1", "preset2"})
+	err = cmd.Execute()
+	if err == nil {
+		t.Fatal("expected an error when too many args provided")
+	}
+	if !strings.Contains(err.Error(), "requires exactly 1 arg") {
+		t.Errorf("expected 'requires exactly 1 arg' error, got: %v", err)
+	}
+}
