@@ -5,7 +5,7 @@ This document describes how to build, test, verify, and release video-compress b
 ## Prerequisites
 
 - Go 1.24.2 (pinned in `go.mod`)
-- GNU Make (or WSL / Linux / macOS)
+- GNU Make (or WSL / Linux / macOS) **OR** PowerShell (for Windows users)
 - `ffmpeg` must be installed on your `PATH` for compression tests/benchmarks.
 
 ## Local Development
@@ -15,25 +15,36 @@ From the **project root** (where `Makefile` and `go.mod` live):
 1. **Tidy modules**
 
    ```bash
+   # Using Make
    make tidy
+
+   # Using PowerShell
+   go mod tidy
    ```
 
 2. **Run tests**
 
    ```bash
+   # Using Make/Bash or PowerShell
    go test ./... -timeout 2m
    ```
 
 3. **Run benchmarks**
 
    ```bash
+   # Using Make/Bash or PowerShell
    go test ./internal/compressor -bench=BenchmarkCompressDefault -benchtime=1s
    ```
 
 4. **Build for all platforms and generate checksums**
 
    ```bash
+   # Using Make
    make
+
+   # Using PowerShell
+   ./build.ps1
+   ./checksum.ps1
    ```
 
    Artifacts and `SHA256SUMS.txt` will be in:
@@ -43,8 +54,13 @@ From the **project root** (where `Makefile` and `go.mod` live):
    - `dist/windows_amd64/`
 
 5. **Clean artifacts**
+
    ```bash
+   # Using Make
    make clean
+
+   # Using PowerShell
+   ./build.ps1 -Clean
    ```
 
 ## Verifying Downloads
