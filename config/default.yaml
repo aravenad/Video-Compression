@@ -1,5 +1,29 @@
 presets:
   default:
     video_codec: libx264
-    preset: medium
     crf: 23
+    preset: medium
+  hq:
+    video_codec: libx264
+    crf: 18
+    preset: slow
+  master-4k:
+    video_codec: libx264
+    crf: 12
+    preset: veryslow
+  mobile-hevc:
+    video_codec: libx265
+    crf: 28
+    preset: fast
+  standard:
+    video_codec: libx264
+    crf: 23
+    preset: medium
+  web-fast:
+    video_codec: libx264
+    crf: 28
+    preset: fast
+  webm-vp9:
+    video_codec: libvpx-vp9
+    crf: 30
+    preset: medium
