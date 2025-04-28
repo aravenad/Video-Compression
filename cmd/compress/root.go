@@ -153,9 +153,10 @@ func newPresetsCmd() *cobra.Command {
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p := presets.Preset{
-				VideoCodec: mustGetString(cmd, "video-codec"),
-				Preset:     mustGetString(cmd, "preset"),
-				CRF:        mustGetInt(cmd, "crf"),
+				VideoCodec:  mustGetString(cmd, "video-codec"),
+				Preset:      mustGetString(cmd, "preset"),
+				CRF:         mustGetInt(cmd, "crf"),
+				Description: mustGetString(cmd, "description"),
 			}
 			if err := savePresetFunc(args[0], p); err != nil {
 				return fmt.Errorf("saving preset %s: %w", args[0], err)
@@ -166,6 +167,7 @@ func newPresetsCmd() *cobra.Command {
 	add.Flags().String("video-codec", "libx264", "ffmpeg video codec")
 	add.Flags().String("preset", "medium", "ffmpeg preset")
 	add.Flags().Int("crf", 23, "ffmpeg CRF value")
+	add.Flags().String("description", "", "description of what this preset is for")
 	pcmd.AddCommand(add)
 
 	// remove
@@ -209,6 +211,9 @@ func newPresetsCmd() *cobra.Command {
 			}
 
 			cmd.Printf("Preset: %s\n", args[0])
+			if p.Description != "" {
+				cmd.Printf("Description: %s\n", p.Description)
+			}
 			cmd.Printf("Video codec: %s\n", p.VideoCodec)
 			cmd.Printf("FFmpeg preset: %s\n", p.Preset)
 			cmd.Printf("CRF value: %d\n", p.CRF)

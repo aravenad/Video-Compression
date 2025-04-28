@@ -23,10 +23,11 @@ var (
 // Preset holds all the ffmpeg settings for one named preset.
 // The Name field is not stored in YAML but populated from the map key.
 type Preset struct {
-	Name       string `yaml:"-"`
-	VideoCodec string `mapstructure:"video_codec" yaml:"video_codec"`
-	CRF        int    `mapstructure:"crf"           yaml:"crf"`
-	Preset     string `mapstructure:"preset"        yaml:"preset"`
+	Name        string `yaml:"-"`
+	VideoCodec  string `mapstructure:"video_codec" yaml:"video_codec"`
+	CRF         int    `mapstructure:"crf"           yaml:"crf"`
+	Preset      string `mapstructure:"preset"        yaml:"preset"`
+	Description string `mapstructure:"description"   yaml:"description"`
 }
 
 // LoadAll reads ConfigFile directly and unmarshals into a map of Presets.

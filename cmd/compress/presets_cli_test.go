@@ -73,7 +73,7 @@ func TestCLI_PresetsAddAndRemove(t *testing.T) {
 	savePresetFunc = func(name string, p presets.Preset) error {
 		saved = append(saved, name)
 		// verify that flags are parsed into the preset struct
-		if p.VideoCodec != "h264" || p.Preset != "fast" || p.CRF != 30 {
+		if p.VideoCodec != "h264" || p.Preset != "fast" || p.CRF != 30 || p.Description != "test description" {
 			t.Errorf("unexpected preset values: %+v", p)
 		}
 		return nil
@@ -94,6 +94,7 @@ func TestCLI_PresetsAddAndRemove(t *testing.T) {
 		"--video-codec", "h264",
 		"--preset", "fast",
 		"--crf", "30",
+		"--description", "test description",
 	})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("presets add failed: %v", err)
@@ -249,9 +250,10 @@ func TestCLI_PresetsShow(t *testing.T) {
 	loadPresetsFunc = func() (map[string]presets.Preset, error) {
 		return map[string]presets.Preset{
 			"test-preset": {
-				VideoCodec: "libx264",
-				Preset:     "slow",
-				CRF:        22,
+				VideoCodec:  "libx264",
+				Preset:      "slow",
+				CRF:         22,
+				Description: "Test preset description",
 			},
 		}, nil
 	}
@@ -269,6 +271,7 @@ func TestCLI_PresetsShow(t *testing.T) {
 	output := buf.String()
 	expectedContent := []string{
 		"Preset: test-preset",
+		"Description: Test preset description",
 		"Video codec: libx264",
 		"FFmpeg preset: slow",
 		"CRF value: 22",

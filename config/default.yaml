@@ -3,27 +3,34 @@ presets:
     video_codec: libx264
     crf: 23
     preset: medium
+    description: "General purpose preset with good balance of quality and file size"
   hq:
     video_codec: libx264
     crf: 18
     preset: slow
+    description: "High quality preset for important videos with minimal quality loss"
   master-4k:
     video_codec: libx264
     crf: 12
     preset: veryslow
+    description: "Ultra high quality for master copies and 4K content archiving"
   mobile-hevc:
     video_codec: libx265
     crf: 28
     preset: fast
+    description: "HEVC/H.265 compression optimized for mobile devices and small file sizes"
   standard:
     video_codec: libx264
     crf: 23
     preset: medium
+    description: "Standard H.264 compression suitable for most purposes"
   web-fast:
     video_codec: libx264
     crf: 28
     preset: fast
+    description: "Fast encoding with smaller file sizes for web sharing and streaming"
   webm-vp9:
     video_codec: libvpx-vp9
     crf: 30
     preset: medium
+    description: "VP9 codec for web publishing on platforms that prefer WebM format"
