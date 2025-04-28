@@ -90,6 +90,15 @@ func runCompress(cmd *cobra.Command, args []string) error {
 	// 5. Enqueue tasks
 	for _, in := range args {
 		dest := deriveOutput(in, output)
+
+		// Ensure output directory exists
+		outDir := filepath.Dir(dest)
+		if outDir != "." && outDir != "" {
+			if err := mkdirAllFunc(outDir, 0o755); err != nil {
+				return fmt.Errorf("failed to create output directory %s: %w", outDir, err)
+			}
+		}
+
 		q.Add(queue.Task{Source: in, Destination: dest, Args: ffArgs})
 	}
 

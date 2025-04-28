@@ -19,4 +19,5 @@ var (
 	osExit               = os.Exit               // allows tests to prevent actual process termination
 	getQueueCompressFunc = queue.GetCompressFunc // gets the queue compression function
 	setQueueCompressFunc = queue.SetCompressFunc // sets the queue compression function
+	mkdirAllFunc         = os.MkdirAll           // creates directories, mockable for tests
 )

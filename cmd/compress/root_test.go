@@ -309,3 +309,63 @@ func TestRoot_CompressWithOverrides(t *testing.T) {
 		t.Errorf("Default preset not preserved: %v", capturedArgs)
 	}
 }
+
+// TestRoot_MkdirFailure verifies that mkdir failures are handled properly
+func TestRoot_MkdirFailure(t *testing.T) {
+	// Save original functions
+	origLoad := loadPresetsFunc
+	origMkdir := mkdirAllFunc
+	origQueueCompress := getQueueCompressFunc()
+
+	// Restore original functions after test
+	defer func() {
+		loadPresetsFunc = origLoad
+		mkdirAllFunc = origMkdir
+		setQueueCompressFunc(origQueueCompress)
+	}()
+
+	// Mock loadPresetsFunc to return a valid preset
+	loadPresetsFunc = func() (map[string]presets.Preset, error) {
+		return map[string]presets.Preset{"default": {}}, nil
+	}
+
+	// Mock MkdirAll to simulate failure for specific paths only
+	mkdirAllFunc = func(path string, perm os.FileMode) error {
+		if strings.Contains(path, "nonexistent") {
+			return fmt.Errorf("mock mkdir failure")
+		}
+		return nil
+	}
+
+	// Set a mock compress function that never gets called
+	compressCalled := false
+	mockCompressFunc := func(in, out string, args []string) error {
+		if strings.Contains(out, "nonexistent") {
+			compressCalled = true
+		}
+		return nil
+	}
+
+	compressFunc = mockCompressFunc
+	setQueueCompressFunc(mockCompressFunc)
+
+	// Create command with non-existing output directory
+	cmd := newRootCmd()
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"compress", "--output", "nonexistent/dir/", "file.mp4"})
+
+	// Execute and verify error
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("Expected error for mkdir failure, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to create output directory") {
+		t.Errorf("Expected 'failed to create output directory' error, got: %v", err)
+	}
+
+	if compressCalled {
+		t.Error("Compress should not have been called after MkdirAll failure")
+	}
+}
