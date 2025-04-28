@@ -34,3 +34,26 @@ dist/
 
 # Local debug/log files
 *.log
+
+# GUI improved paths
+/ui/gui/node_modules/
+ui/gui/src-tauri/target/
+ui/gui/dist/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# OS specific
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Rust
+Cargo.lock
+**/*.rs.bk
+
+# Go specific
+/go.sum
+/.cache/
